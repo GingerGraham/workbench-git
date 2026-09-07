@@ -38,7 +38,7 @@ while IFS= read -r src; do
         fail "manifest references missing file: ${src}"
         _missing=$((_missing + 1))
     fi
-done < <(grep -E '^\s*(-\s*)?src:' "${MANIFEST}" | sed -E 's/^\s*-?\s*src:\s*//')
+done < <(grep -E '^[[:space:]]*(-[[:space:]]*)?src:' "${MANIFEST}" | sed -E 's/^[[:space:]]*-?[[:space:]]*src:[[:space:]]*//')
 
 [[ -x "${REPO_ROOT}/hooks/post-deploy.sh" ]] \
     && ok "hooks/post-deploy.sh is executable" \

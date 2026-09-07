@@ -19,7 +19,13 @@
 
 use_git_context() {
     local cli="${1:-}" ctx="${2:-}" host="${3:-}"
-    local base="${XDG_CONFIG_HOME:-${HOME}/.config}/git"
+    # Hardcoded to ${HOME}/.config/git, matching shell/git.sh exactly (e.g.
+    # _git_cli_config_dir) — not XDG-driven, unlike this file's own path
+    # under $XDG_CONFIG_HOME/direnv/lib/. If XDG_CONFIG_HOME were honoured
+    # here instead, a user with it set to a non-default location would get
+    # GH_CONFIG_DIR pointed at an empty directory while git.sh keeps
+    # writing to ${HOME}/.config/git, silently breaking CLI context wiring.
+    local base="${HOME}/.config/git"
 
     [[ -z "${cli}" || -z "${ctx}" ]] && {
         log_status "use git_context: usage: use git_context <gh|glab> <context> [host]"
