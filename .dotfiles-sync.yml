@@ -1,0 +1,50 @@
+# .dotfiles-sync.yml — workbench-git
+#
+# Ecosystem module (workbench-core ARCHITECTURE.md §2/§3): git identity and
+# multi-context project management. Meaningless standalone — depends on
+# workbench-core's loader, Core API (elevation/_read_prompt/_str_lower,
+# platform facts, installers-common.sh), and sync engine.
+#
+# See contracts/manifest-spec.md (in workbench-core) for the full field
+# reference.
+version: 1
+branch: main
+
+core_api: ">=1.1 <2.0"
+sync:
+  enabled: true
+
+deploy:
+  - src: files/attributes
+    dest: ~/.config/git/attributes
+    mode: copy
+    force: true
+  - src: files/ignore
+    dest: ~/.config/git/ignore
+    mode: copy
+    force: true
+  - src: files/workbench-git-context.sh
+    dest: ~/.config/direnv/lib/workbench-git-context.sh
+    mode: copy
+    force: true
+
+register:
+  shell:
+    - src: shell/git.sh
+      tier: tools
+    - src: shell/completions/gh.sh
+      tier: tools
+    - src: shell/completions/glab.sh
+      tier: tools
+  installers:
+    - src: shell/installers.sh
+  getters:
+    - name: git
+      function: get-git-functions
+      label: "Git identity, project-context, and CLI-wiring helpers"
+
+hooks:
+  post_deploy:
+    command: ["hooks/post-deploy.sh"]
+    run_on: initial
+    timeout: 60
