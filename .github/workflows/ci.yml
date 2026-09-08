@@ -12,9 +12,14 @@ on:
 jobs:
   module-ci:
     # TODO: bump to @main once GingerGraham/workbench-core#33 (D40) merges.
-    # Pinned to that PR's branch for now so this actually runs end-to-end
-    # while both are under review.
-    uses: GingerGraham/workbench-core/.github/workflows/module-ci.yml@claude/workbench-extension-ci-ska0he
+    # Pinned to that PR's branch HEAD sha for now (reusable-workflow `uses:`
+    # refs can't contain a "/", so the branch name itself can't be used
+    # here) so this actually runs end-to-end while both are under review.
+    uses: GingerGraham/workbench-core/.github/workflows/module-ci.yml@871bc70a5e3136e20d98cd63ec4a9174912e8efd
     with:
       module_name: git
-      core_ref: ${{ inputs.core_ref }}
+      # github.event.inputs.* (not the `inputs` context) is the form that's
+      # always safe to reference regardless of which event triggered this
+      # run -- the bare `inputs` context only exists for workflow_dispatch/
+      # workflow_call-triggered runs and errors out on a pull_request run.
+      core_ref: ${{ github.event.inputs.core_ref }}
