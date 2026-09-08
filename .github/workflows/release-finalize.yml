@@ -11,5 +11,5 @@ jobs:
     # TODO: bump to @main once GingerGraham/workbench-core#33 (D40) merges.
     # Pinned to that PR's branch HEAD sha (reusable-workflow `uses:` refs
     # can't contain a "/", so the branch name itself can't be used here).
-    uses: GingerGraham/workbench-core/.github/workflows/module-release-finalize.yml@9684d4caf9b6db4ce4fe8bca269b2557d023f783
+    uses: GingerGraham/workbench-core/.github/workflows/module-release-finalize.yml@2e7065a25e5a2ebc48336a24b37a179d10f11129
     secrets: inherit
