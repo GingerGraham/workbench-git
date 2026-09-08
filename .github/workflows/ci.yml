@@ -15,7 +15,7 @@ jobs:
     # Pinned to that PR's branch HEAD sha for now (reusable-workflow `uses:`
     # refs can't contain a "/", so the branch name itself can't be used
     # here) so this actually runs end-to-end while both are under review.
-    uses: GingerGraham/workbench-core/.github/workflows/module-ci.yml@5c25cdffdede67c318a7aa997a5da691dc99d35c
+    uses: GingerGraham/workbench-core/.github/workflows/module-ci.yml@9684d4caf9b6db4ce4fe8bca269b2557d023f783
     with:
       module_name: git
       # github.event.inputs.* (not the `inputs` context) is the form that's
