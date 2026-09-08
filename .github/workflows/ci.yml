@@ -22,4 +22,8 @@ jobs:
       # always safe to reference regardless of which event triggered this
       # run -- the bare `inputs` context only exists for workflow_dispatch/
       # workflow_call-triggered runs and errors out on a pull_request run.
-      core_ref: ${{ github.event.inputs.core_ref }}
+      # Defaults to the in-flight core PR branch for now (its "add to
+      # core" script doesn't exist on any published release yet) --
+      # TODO: drop this default back to empty (core's latest release)
+      # once GingerGraham/workbench-core#33 (D40) merges.
+      core_ref: ${{ github.event.inputs.core_ref || 'claude/workbench-extension-ci-ska0he' }}
