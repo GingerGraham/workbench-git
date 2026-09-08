@@ -1,0 +1,10 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  commit-format:
+    # TODO: bump to @main once GingerGraham/workbench-core#33 (D40) merges.
+    uses: GingerGraham/workbench-core/.github/workflows/module-pr-check.yml@claude/workbench-extension-ci-ska0he

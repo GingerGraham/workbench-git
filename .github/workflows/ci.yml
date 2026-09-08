@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      core_ref:
+        description: "workbench-core ref to test against (default: core's latest published release)"
+        required: false
+
+jobs:
+  module-ci:
+    # TODO: bump to @main once GingerGraham/workbench-core#33 (D40) merges.
+    # Pinned to that PR's branch for now so this actually runs end-to-end
+    # while both are under review.
+    uses: GingerGraham/workbench-core/.github/workflows/module-ci.yml@claude/workbench-extension-ci-ska0he
+    with:
+      module_name: git
+      core_ref: ${{ inputs.core_ref }}

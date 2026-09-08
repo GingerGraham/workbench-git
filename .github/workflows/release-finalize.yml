@@ -1,0 +1,13 @@
+name: Release Finalize
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  finalize:
+    # module-release-finalize.yml gates internally on merged + release/v*.
+    # TODO: bump to @main once GingerGraham/workbench-core#33 (D40) merges.
+    uses: GingerGraham/workbench-core/.github/workflows/module-release-finalize.yml@claude/workbench-extension-ci-ska0he
+    secrets: inherit

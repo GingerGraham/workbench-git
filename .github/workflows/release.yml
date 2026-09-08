@@ -1,0 +1,23 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(release):') }}
+    # TODO: bump to @main once GingerGraham/workbench-core#33 (D40) merges.
+    uses: GingerGraham/workbench-core/.github/workflows/module-ci.yml@claude/workbench-extension-ci-ska0he
+    with:
+      module_name: git
+
+  release:
+    needs: ci
+    # TODO: bump to @main once GingerGraham/workbench-core#33 (D40) merges.
+    uses: GingerGraham/workbench-core/.github/workflows/module-release.yml@claude/workbench-extension-ci-ska0he
+    secrets: inherit
