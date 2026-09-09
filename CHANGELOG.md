@@ -4,6 +4,8 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-09
+
 ### Fixed
 
 - Moved `files/attributes`/`files/ignore`'s `deploy:` destination from
