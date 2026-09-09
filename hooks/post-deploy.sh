@@ -25,9 +25,12 @@ LOCAL_INC="${PROFILES_DIR}/local.inc"
 # STATIC_DIR is where this module's deploy: entries actually land
 # (.dotfiles-sync.yml) — deliberately NOT under ~/.config/git/, which is on
 # workbench-core's dest denylist (contracts/manifest-spec.md §dest
-# validation). Keep this in sync with .dotfiles-sync.yml's deploy[].dest
-# and shell/git.sh's git-setup-identity.
-STATIC_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/modules/git/files"
+# validation). Deliberately NOT $XDG_DATA_HOME-aware: deploy[].dest is
+# always anchored at ~/ (i.e. $HOME) per contracts/manifest-spec.md §dest
+# validation, regardless of $XDG_DATA_HOME, so this must match literally.
+# Keep this in sync with .dotfiles-sync.yml's deploy[].dest and
+# shell/git.sh's git-setup-identity.
+STATIC_DIR="${HOME}/.local/share/workbench/modules/git/files"
 
 mkdir -p "${PROFILES_DIR}"
 

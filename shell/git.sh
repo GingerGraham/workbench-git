@@ -229,7 +229,11 @@ git-setup-identity() {
     git config --global color.ui true
     # NOT ~/.config/git/ — see hooks/post-deploy.sh and README.md's "File
     # ownership" table for why these live under the module's own state dir.
-    local static_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/modules/git/files"
+    # Deliberately NOT $XDG_DATA_HOME-aware: deploy[].dest is always
+    # anchored at ~/ ($HOME) regardless of $XDG_DATA_HOME
+    # (contracts/manifest-spec.md §dest validation), so this must match
+    # literally.
+    local static_dir="${HOME}/.local/share/workbench/modules/git/files"
     git config --global core.excludesfile "${static_dir}/ignore"
     git config --global core.attributesfile "${static_dir}/attributes"
 
