@@ -484,5 +484,5 @@ install-yq() {
 # would false-positive on the wrong tool entirely.
 installed-yq() {
     command -v yq &>/dev/null || return 1
-    yq --version 2>/dev/null | grep -qiE 'mikefarah'
+    yq --version 2>/dev/null | head -1 | grep -qiE '(https://github.com/mikefarah|mikefarah)'
 }
