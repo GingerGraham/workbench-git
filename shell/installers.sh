@@ -190,6 +190,11 @@ install-gh() {
     fi
 }
 
+# See workbench-core docs/module-authoring.md "Reporting install status".
+installed-gh() {
+    command -v gh &>/dev/null
+}
+
 # ── GitLab CLI install ────────────────────────────────────────────────────────
 # Fedora/RHEL: official dnf/yum repo package 'glab'.
 # Arch: official 'extra/glab' via pacman.
@@ -365,6 +370,10 @@ install-glab() {
     fi
 }
 
+installed-glab() {
+    command -v glab &>/dev/null
+}
+
 # ── yq (mikefarah/yq v4) install ──────────────────────────────────────────────
 # Required by git.sh's manifest operations. Package availability varies:
 #   - Fedora: yq is in base repos
@@ -468,4 +477,12 @@ install-yq() {
     else
         log_warn "yq not on PATH after install — check ~/.local/bin is in PATH"
     fi
+}
+
+# Mirrors install-yq's own disambiguation: a Python (kislyuk/yq) 'yq' can
+# shadow the intended mikefarah/yq binary on PATH — a plain `command -v yq`
+# would false-positive on the wrong tool entirely.
+installed-yq() {
+    command -v yq &>/dev/null || return 1
+    yq --version 2>/dev/null | grep -qiE 'mikefarah'
 }
