@@ -6,6 +6,9 @@ All notable changes to `workbench-git` are documented here.
 
 ### Added
 
+- Added `installed-gh`, `installed-glab`, `installed-yq` — reports install
+  status to `wb tools upgrade`/`wb tools list --status` (workbench-core
+  §12 D43).
 - Initial decomposition from `workbench-precursor` (Wave C): git aliases,
   worktree helpers (`gwt`/`gwt-cd`), multi-context project identity
   management (`git-add-project`/`git-update-project`/`git-remove-project`/
