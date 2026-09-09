@@ -12,11 +12,25 @@
 # git-setup-identity in shell/git.sh, since no hook can safely guess it.
 set -uo pipefail
 
+# GIT_CONFIG_DIR holds this module's own *generated, runtime* state
+# (projects.yml/project-includes/profiles/) — never touched by
+# workbench-core's manifest denylist since it's created here, not by a
+# deploy: entry.
 GIT_CONFIG_DIR="${HOME}/.config/git"
 MANIFEST="${GIT_CONFIG_DIR}/projects.yml"
 INCLUDES="${GIT_CONFIG_DIR}/project-includes"
 PROFILES_DIR="${GIT_CONFIG_DIR}/profiles"
 LOCAL_INC="${PROFILES_DIR}/local.inc"
+
+# STATIC_DIR is where this module's deploy: entries actually land
+# (.dotfiles-sync.yml) — deliberately NOT under ~/.config/git/, which is on
+# workbench-core's dest denylist (contracts/manifest-spec.md §dest
+# validation). Deliberately NOT $XDG_DATA_HOME-aware: deploy[].dest is
+# always anchored at ~/ (i.e. $HOME) per contracts/manifest-spec.md §dest
+# validation, regardless of $XDG_DATA_HOME, so this must match literally.
+# Keep this in sync with .dotfiles-sync.yml's deploy[].dest and
+# shell/git.sh's git-setup-identity.
+STATIC_DIR="${HOME}/.local/share/workbench/modules/git/files"
 
 mkdir -p "${PROFILES_DIR}"
 
@@ -46,8 +60,8 @@ fi
 
 # Point global git config at this module's deployed static content and the
 # two [include] files above — idempotent, safe to re-run.
-git config --global core.excludesfile "${GIT_CONFIG_DIR}/ignore"
-git config --global core.attributesfile "${GIT_CONFIG_DIR}/attributes"
+git config --global core.excludesfile "${STATIC_DIR}/ignore"
+git config --global core.attributesfile "${STATIC_DIR}/attributes"
 git config --global --unset-all include.path 2>/dev/null || true
 git config --global --add include.path "${LOCAL_INC}"
 git config --global --add include.path "${INCLUDES}"

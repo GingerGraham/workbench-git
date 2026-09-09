@@ -4,6 +4,17 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Moved `files/attributes`/`files/ignore`'s `deploy:` destination from
+  `~/.config/git/` to `~/.local/share/workbench/modules/git/files/` —
+  `~/.config/git/` is on `workbench-core`'s `dest` denylist
+  (`contracts/manifest-spec.md` §dest validation), so `manifest validate`
+  was failing CI for every PR. `core.excludesfile`/`core.attributesfile`
+  (set by `hooks/post-deploy.sh` and `git-setup-identity`) now point at the
+  new location — no user-visible behaviour change. See README.md's "File
+  ownership" table for the full explanation.
+
 ### Added
 
 - Added `installed-gh`, `installed-glab`, `installed-yq` — reports install
