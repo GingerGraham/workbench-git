@@ -227,8 +227,11 @@ git-setup-identity() {
     git config --global push.autoSetupRemote true
     git config --global pull.rebase false
     git config --global color.ui true
-    git config --global core.excludesfile "${HOME}/.config/git/ignore"
-    git config --global core.attributesfile "${HOME}/.config/git/attributes"
+    # NOT ~/.config/git/ — see hooks/post-deploy.sh and README.md's "File
+    # ownership" table for why these live under the module's own state dir.
+    local static_dir="${XDG_DATA_HOME:-${HOME}/.local/share}/workbench/modules/git/files"
+    git config --global core.excludesfile "${static_dir}/ignore"
+    git config --global core.attributesfile "${static_dir}/attributes"
 
     if [[ -n "${key}" ]]; then
         git config --global user.signingkey "${key}"

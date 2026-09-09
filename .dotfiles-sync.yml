@@ -15,12 +15,17 @@ sync:
   enabled: true
 
 deploy:
+  # NOT ~/.config/git/ — that prefix is on workbench-core's dest denylist
+  # (contracts/manifest-spec.md §dest validation), a deliberate trust
+  # boundary, not an oversight. core.excludesfile/attributesfile are set
+  # by hooks/post-deploy.sh (and shell/git.sh's git-setup-identity) to
+  # point here instead — see README.md's "File ownership" table.
   - src: files/attributes
-    dest: ~/.config/git/attributes
+    dest: ~/.local/share/workbench/modules/git/files/attributes
     mode: copy
     force: true
   - src: files/ignore
-    dest: ~/.config/git/ignore
+    dest: ~/.local/share/workbench/modules/git/files/ignore
     mode: copy
     force: true
   - src: files/workbench-git-context.sh
