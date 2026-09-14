@@ -2,8 +2,8 @@
 
 ## Supported versions
 
-Only the latest tagged release (see `VERSION` at the repo root, or the
-latest `vX.Y.Z` tag) is supported. There are no maintained LTS branches.
+Only the latest tagged release (the latest `vX.Y.Z` tag) is supported.
+There are no maintained LTS branches.
 
 ## Reporting a vulnerability
 

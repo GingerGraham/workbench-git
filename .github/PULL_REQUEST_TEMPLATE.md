@@ -19,7 +19,7 @@
 - [ ] Every commit follows Conventional Commits, and the **PR title**
       itself parses too — this repo squash-merges, and
       `module-pr-check.yml`'s `pr-title-format` job fails the PR
-      otherwise. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+      otherwise. See [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 - [ ] If this is user-facing, `CHANGELOG.md`'s `## [Unreleased]` has a
       new entry under the right heading — `release.yml` refuses to cut
       a release with an empty one.
@@ -27,7 +27,7 @@
       new/updated suite exists if behaviour changed.
 - [ ] `shellcheck shell/**/*.sh hooks/*.sh` is clean.
 - [ ] Everything under `shell/`, `hooks/`, `tests/` stays Bash 3.2
-      compatible — see [`CONTRIBUTING.md`](CONTRIBUTING.md#bash-32-compatibility).
+      compatible — see [`CONTRIBUTING.md`](../CONTRIBUTING.md#bash-32-compatibility).
 - [ ] If this touches repo structure, the manifest schema, or the sync
       engine, `workbench-core`'s
       [`docs/decisions-log.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/decisions-log.md)
