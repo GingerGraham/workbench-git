@@ -16,7 +16,10 @@ jobs:
     # core's own release automation never version-bumps for (it only bumps
     # on changes to registered bin/lib/bootstrap.sh files) -- so a core
     # release containing this workflow will never exist to default to.
-    uses: GingerGraham/workbench-core/.github/workflows/module-ci.yml@main
+    # PILOT: temporarily pinned to workbench-core's CI-security-scanning
+    # feature branch to test the new scan-secrets/scan-malware/scan-patterns
+    # jobs before they exist on main. Flip back to @main once confirmed.
+    uses: GingerGraham/workbench-core/.github/workflows/module-ci.yml@claude/zealous-davinci-yq9s21
     with:
       module_name: git
       core_ref: ${{ github.event.inputs.core_ref || 'main' }}
