@@ -4,6 +4,8 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-14
+
 ### Added
 
 - **Agent-instruction files** (`AGENTS.md`, `CLAUDE.md`,
