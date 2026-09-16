@@ -256,7 +256,7 @@ git-setup-identity() {
 # once.
 _git_yq_present() {
     command -v yq &>/dev/null \
-        && yq --version 2>&1 | grep -qE 'mikefarah|version v4|yq \(https://github.com/mikefarah'
+        && yq --version 2>&1 | grep -qE 'version v?4\.'
 }
 
 _git_require_yq() {
