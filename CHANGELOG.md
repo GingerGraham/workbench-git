@@ -4,6 +4,8 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-16
+
 ### Fixed
 
 - yq-gated project-management functions (`git-list-projects`,
