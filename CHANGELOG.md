@@ -4,6 +4,18 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- yq-gated project-management functions (`git-list-projects`,
+  `git-add-project`, `git-add-project-cli`, `git-remove-project-cli`,
+  `git-update-project`, `git-remove-project`, `git-sync-projects`) no
+  longer appear in `wb functions`/module-getter listings when yq is
+  missing or the wrong variant (e.g. `python3-yq` shadowing
+  mikefarah/yq v4) — they would previously list but immediately fail
+  via `_git_require_yq`. Uses `workbench-core`'s new
+  `_wb_alias_availability` predicate convention, backed by a quiet twin
+  (`_git_yq_present`) of `_git_require_yq`'s existing version check.
+
 ## [0.1.1] - 2026-09-14
 
 ### Added

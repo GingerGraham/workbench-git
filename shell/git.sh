@@ -250,13 +250,22 @@ git-setup-identity() {
 #
 # Internal helpers are prefixed with _git_. Do not call them directly.
 
+# Quiet twin of the check below — reused by both _git_require_yq's loud
+# preflight and every gated function's silent predicate (see
+# _wb_alias_availability below), so "is yq usable" is defined exactly
+# once.
+_git_yq_present() {
+    command -v yq &>/dev/null \
+        && yq --version 2>&1 | grep -qE 'version v?4\.'
+}
+
 _git_require_yq() {
     if ! command -v yq &>/dev/null; then
         log_error "yq is required for git project management."
         log_error "Install: https://github.com/mikefarah/yq#install"
         return 1
     fi
-    if ! yq --version 2>&1 | grep -qE 'mikefarah|version v4|yq \(https://github.com/mikefarah'; then
+    if ! _git_yq_present; then
         log_error "Wrong yq detected — mikefarah/yq v4 is required."
         log_error "Found: $(yq --version 2>&1)"
         log_error "Install: https://github.com/mikefarah/yq#install"
@@ -264,6 +273,21 @@ _git_require_yq() {
         return 1
     fi
 }
+
+# Availability gating for wb functions/module getters: these project-
+# management functions all require mikefarah/yq v4 and are unusable
+# without it (they all call _git_require_yq themselves) — hide them from
+# listings when yq is missing or the wrong variant, rather than listing
+# functions that will just fail. See workbench-core's
+# docs/module-authoring.md "Declaring function availability".
+_wb_alias_availability _git_yq_present \
+    git-list-projects \
+    git-add-project \
+    git-add-project-cli \
+    git-remove-project-cli \
+    git-update-project \
+    git-remove-project \
+    git-sync-projects
 
 _git_manifest() {
     echo "${HOME}/.config/git/projects.yml"
