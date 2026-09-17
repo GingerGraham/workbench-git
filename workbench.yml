@@ -1,4 +1,4 @@
-# .dotfiles-sync.yml — workbench-git
+# workbench.yml — workbench-git
 #
 # Ecosystem module (workbench-core ARCHITECTURE.md §2/§3): git identity and
 # multi-context project management. Meaningless standalone — depends on
@@ -7,12 +7,15 @@
 #
 # See contracts/manifest-spec.md (in workbench-core) for the full field
 # reference.
-version: 1
+version: 2
 branch: main
 
 core_api: ">=1.2 <2.0"
 sync:
   enabled: true
+
+info:
+  description: "Git identity, multi-context project management, and CLI-wiring helpers"
 
 deploy:
   # NOT ~/.config/git/ — that prefix is on workbench-core's dest denylist
