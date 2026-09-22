@@ -63,7 +63,7 @@ jobs:
     uses: GingerGraham/workbench-core/.github/workflows/module-release.yml@main
     with:
       core_ref: main
-      bump_type: ${{ inputs.bump_type }}
-      reason: ${{ inputs.reason }}
+      bump_type: ${{ github.event.inputs.bump_type }}
+      reason: ${{ github.event.inputs.reason }}
     secrets:
       RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
