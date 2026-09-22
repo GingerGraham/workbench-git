@@ -4,6 +4,12 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-22
+
+### Changed
+
+- Testing manual release 
+
 ## [0.2.0] - 2026-09-22
 
 ### Added
