@@ -4,6 +4,8 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-24
+
 ### Security
 
 - **`GITHUB_PERSONAL_ACCESS_TOKEN` is no longer exported by default.** Both
