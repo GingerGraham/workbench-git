@@ -13,6 +13,12 @@ All notable changes to `workbench-git` are documented here.
   `~/.config/workbench/local/settings.sh` to opt in. An exported token is
   readable by every process the shell starts and typically carries `repo`
   and `workflow` scope.
+- **`hooks/post-deploy.sh` no longer deletes the user's own `include.path`
+  entries.** It used to run `git config --global --unset-all include.path`
+  unconditionally on every run, then re-add only workbench's own two paths —
+  silently dropping anything the user had added themselves (e.g. a
+  work-identity include, or a `credential.helper` override). It now removes
+  only its own two entries (`--fixed-value`) before re-adding them.
 
 ## [0.2.0] - 2026-09-22
 
