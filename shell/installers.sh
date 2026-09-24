@@ -32,7 +32,11 @@ _gh_release_asset_url() {
 # Two fingerprints are current at once, a rotation overlap window per that
 # doc and cli/cli#13118: the old key (...716059) expired 2026-09-05, the new
 # key (...313325) has been current since 2026-04-08. Either is trusted.
-_GH_CLI_KEY_FPRS="2C6106201985B60E6C7AC87323F3D4EA75716059 7F38BBB59D064DBCB3D84D725612B36462313325"
+# Public OpenPGP fingerprints, not secrets — gitleaks' generic-api-key rule
+# false-positives on the bare hex; gitleaks:allow is the standard per-line
+# suppression for a verified false positive on a non-secret high-entropy
+# string (see gitleaks docs, "Additional Configuration" — inline comments).
+_GH_CLI_KEY_FPRS="2C6106201985B60E6C7AC87323F3D4EA75716059 7F38BBB59D064DBCB3D84D725612B36462313325" # gitleaks:allow
 
 # _gh_key_fingerprint_ok <keyfile>
 # True iff <keyfile> contains a primary key matching one of the pinned
