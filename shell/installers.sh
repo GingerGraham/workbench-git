@@ -27,6 +27,62 @@ _gh_release_asset_url() {
 
 # ── GitHub CLI install ────────────────────────────────────────────────────────
 
+# GitHub CLI packaging keys — confirmed against cli/cli's docs/install_linux.md
+# (https://github.com/cli/cli/blob/trunk/docs/install_linux.md) on 2026-09-24.
+# Two fingerprints are current at once, a rotation overlap window per that
+# doc and cli/cli#13118: the old key (...716059) expired 2026-09-05, the new
+# key (...313325) has been current since 2026-04-08. Either is trusted.
+# Public OpenPGP fingerprints, not secrets — gitleaks' generic-api-key rule
+# false-positives on the bare hex; gitleaks:allow is the standard per-line
+# suppression for a verified false positive on a non-secret high-entropy
+# string (see gitleaks docs, "Additional Configuration" — inline comments).
+_GH_CLI_KEY_FPRS="2C6106201985B60E6C7AC87323F3D4EA75716059 7F38BBB59D064DBCB3D84D725612B36462313325" # gitleaks:allow
+
+# _gh_key_fingerprint_ok <keyfile>
+# True iff <keyfile> contains a primary key matching one of the pinned
+# GitHub CLI packaging fingerprints (security review M4).
+_gh_key_fingerprint_ok() {
+    local keyfile="$1" fpr
+    # shellcheck disable=SC2086  # deliberate word-splitting: a space-separated list
+    for fpr in ${_GH_CLI_KEY_FPRS}; do
+        _wb_key_has_fingerprint "${keyfile}" "${fpr}" && return 0
+    done
+    return 1
+}
+
+# _gh_import_verified_key <key-url>
+# Imports the GitHub CLI packaging key into rpm only if its fingerprint
+# matches one of _GH_CLI_KEY_FPRS (security review M4). Importing first
+# also means dnf/zypper never auto-accept an unchecked key.
+_gh_import_verified_key() {
+    local key_url="$1" tmp elevation_cmd rc
+    elevation_cmd="$(get-elevation-command)" || return 1
+    tmp="$(mktemp)" || return 1
+    _download_file_robust "${key_url}" "${tmp}" || { rm -f "${tmp}"; return 1; }
+    if ! _gh_key_fingerprint_ok "${tmp}"; then
+        log_error "GitHub CLI signing key at ${key_url} does not match a pinned fingerprint — refusing to trust it"
+        rm -f "${tmp}"
+        return 1
+    fi
+    ${elevation_cmd} rpm --import "${tmp}"
+    rc=$?
+    rm -f "${tmp}"
+    return ${rc}
+}
+
+# _gh_repo_gpgkey_and_id <repo-file-url>
+# Fetches a .repo file and prints its gpgkey= value then its [section] id,
+# one per line. Neither is hardcoded — GitHub controls when the key
+# rotates (cli/cli#13118), and reading the id the same way keeps this in
+# sync with it rather than assuming it stays "gh-cli".
+_gh_repo_gpgkey_and_id() {
+    local content
+    content="$(curl -fsS "$1")" || return 1
+    [[ -z "${content}" ]] && return 1
+    printf '%s\n' "${content}" | sed -n 's/^gpgkey=//p' | head -1
+    printf '%s\n' "${content}" | sed -n 's/^\[\(.*\)\]$/\1/p' | head -1
+}
+
 # DNF5 (Fedora 41+) and DNF4 use different config-manager syntax.
 _gh_dnf_is_v5() {
     command -v dnf5 &>/dev/null && return 0
@@ -38,21 +94,39 @@ _gh-install-rhel() {
     [[ "${elevation_cmd}" == "run0" ]] && log_warn "run0 detected — multiple prompts expected"
     local repo_url="https://cli.github.com/packages/rpm/gh-cli.repo"
 
+    # Fedora ships gh in its own signed repositories — prefer that over a
+    # third-party repo (security review M4).
+    if [[ -f /etc/fedora-release ]] && command -v dnf &>/dev/null; then
+        if ${elevation_cmd} dnf install -y gh; then
+            return 0
+        fi
+        log_warn "gh not available from Fedora repositories — falling back to the GitHub CLI repo"
+    fi
+
+    local gpgkey_url repo_id
+    { read -r gpgkey_url; read -r repo_id; } < <(_gh_repo_gpgkey_and_id "${repo_url}")
+    [[ -z "${gpgkey_url}" ]] && { log_error "Could not read gpgkey= from ${repo_url}"; return 1; }
+    [[ -z "${repo_id}" ]] && repo_id="gh-cli"
+    _gh_import_verified_key "${gpgkey_url}" || return 1
+
     if command -v dnf &>/dev/null; then
         if _gh_dnf_is_v5; then
             log_info "Configuring GitHub CLI repo (dnf5)..."
             ${elevation_cmd} dnf install -y dnf5-plugins
             ${elevation_cmd} dnf config-manager addrepo --from-repofile="${repo_url}" || true
+            ${elevation_cmd} dnf config-manager setopt "${repo_id}".includepkgs=gh
         else
             log_info "Configuring GitHub CLI repo (dnf4)..."
             ${elevation_cmd} dnf install -y 'dnf-command(config-manager)'
             ${elevation_cmd} dnf config-manager --add-repo "${repo_url}"
+            ${elevation_cmd} dnf config-manager --save --setopt="${repo_id}".includepkgs=gh
         fi
         ${elevation_cmd} dnf install -y gh
     elif command -v yum &>/dev/null; then
         log_info "Configuring GitHub CLI repo (yum)..."
         command -v yum-config-manager &>/dev/null || ${elevation_cmd} yum install -y yum-utils
         ${elevation_cmd} yum-config-manager --add-repo "${repo_url}"
+        ${elevation_cmd} yum-config-manager --save --setopt="${repo_id}".includepkgs=gh
         ${elevation_cmd} yum install -y gh
     else
         log_error "Neither dnf nor yum found"; return 1
@@ -71,6 +145,10 @@ _gh-install-debian() {
     if ! wget -nv -O "${tmp}" https://cli.github.com/packages/githubcli-archive-keyring.gpg; then
         log_error "Failed to download GitHub CLI keyring"; rm -f "${tmp}"; return 1
     fi
+    if ! _gh_key_fingerprint_ok "${tmp}"; then
+        log_error "GitHub CLI apt keyring does not match a pinned fingerprint — refusing to trust it"
+        rm -f "${tmp}"; return 1
+    fi
     ${elevation_cmd} install -m 644 "${tmp}" "${keyring}"
     rm -f "${tmp}"
     ${elevation_cmd} mkdir -p -m 755 /etc/apt/sources.list.d
@@ -83,12 +161,19 @@ _gh-install-debian() {
 _gh-install-suse() {
     local elevation_cmd; elevation_cmd="$(get-elevation-command)" || return 1
     local repo_url="https://cli.github.com/packages/rpm/gh-cli.repo"
-    if zypper lr 2>/dev/null | grep -qi 'gh-cli'; then
+
+    local gpgkey_url repo_id
+    { read -r gpgkey_url; read -r repo_id; } < <(_gh_repo_gpgkey_and_id "${repo_url}")
+    [[ -z "${gpgkey_url}" ]] && { log_error "Could not read gpgkey= from ${repo_url}"; return 1; }
+    [[ -z "${repo_id}" ]] && repo_id="gh-cli"
+    _gh_import_verified_key "${gpgkey_url}" || return 1
+
+    if zypper lr 2>/dev/null | grep -qi "${repo_id}"; then
         log_info "GitHub CLI zypper repo already present"
     else
         ${elevation_cmd} zypper addrepo "${repo_url}"
     fi
-    ${elevation_cmd} zypper --gpg-auto-import-keys ref
+    ${elevation_cmd} zypper --non-interactive refresh "${repo_id}"
     ${elevation_cmd} zypper install -y gh
 }
 
@@ -108,7 +193,8 @@ _gh-install-tarball() {
     command -v tar &>/dev/null || { log_error "tar is required for the fallback install"; return 1; }
 
     local api_response ver ver_num
-    api_response="$(curl -s https://api.github.com/repos/cli/cli/releases/latest)"
+    api_response="$(curl -fsS https://api.github.com/repos/cli/cli/releases/latest)" \
+        || { log_error "Could not query the latest gh release (network or GitHub API rate limit)"; return 1; }
     ver="$(printf '%s' "${api_response}" | grep '"tag_name":' \
         | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/' | head -1)"
     [[ -z "${ver}" ]] && { log_error "Could not determine latest gh version (GitHub API rate limit?)"; return 1; }
@@ -133,8 +219,14 @@ _gh-install-tarball() {
     local url="https://github.com/cli/cli/releases/download/${ver}/${asset}"
     local tmp_dir; tmp_dir="$(mktemp -d)"
 
+    # Verified against the SHA-256 GitHub publishes for this asset, falling
+    # back to the release's checksums file (security review M3).
+    local expect
+    expect="$(_wb_gh_asset_digest "${api_response}" "${url}")"
+    [[ -z "${expect}" ]] && expect="sums:https://github.com/cli/cli/releases/download/${ver}/gh_${ver_num}_checksums.txt"
+
     log_info "Downloading ${asset}..."
-    _download_file_robust "${url}" "${tmp_dir}/${asset}" || { rm -rf "${tmp_dir}"; return 1; }
+    _wb_fetch_verified "${url}" "${tmp_dir}/${asset}" "${expect}" || { rm -rf "${tmp_dir}"; return 1; }
 
     if [[ "${ext}" == "zip" ]]; then
         command -v unzip &>/dev/null || { log_error "unzip is required"; rm -rf "${tmp_dir}"; return 1; }
@@ -228,7 +320,13 @@ _glab-install-arch() {
 
 # Shared: latest glab tag and arch suffix, used by the debian/suse/tarball paths.
 _glab-latest-tag() {
-    curl -s "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/releases?order_by=released_at&sort=desc&per_page=1" \
+    local api_response
+    # Captured separately, not piped straight into grep/sed: a pipeline's
+    # exit status is its last command's, so a curl failure would otherwise
+    # be masked by grep/sed succeeding on empty input.
+    api_response="$(curl -fsS "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/releases?order_by=released_at&sort=desc&per_page=1")" \
+        || return 1
+    printf '%s' "${api_response}" \
         | grep -o '"tag_name": *"[^"]*"' \
         | head -1 \
         | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'
@@ -255,7 +353,9 @@ _glab-install-debian() {
     tmp_dir="$(mktemp -d)"
 
     log_info "Downloading ${asset}..."
-    _download_file_robust "${url}" "${tmp_dir}/${asset}" || { rm -rf "${tmp_dir}"; return 1; }
+    _wb_fetch_verified "${url}" "${tmp_dir}/${asset}" \
+        "sums:https://gitlab.com/gitlab-org/cli/-/releases/${ver}/downloads/checksums.txt" \
+        || { rm -rf "${tmp_dir}"; return 1; }
     ${elevation_cmd} dpkg -i "${tmp_dir}/${asset}" || ${elevation_cmd} apt-get install -f -y
     rm -rf "${tmp_dir}"
 }
@@ -273,7 +373,9 @@ _glab-install-suse() {
     tmp_dir="$(mktemp -d)"
 
     log_info "Downloading ${asset}..."
-    _download_file_robust "${url}" "${tmp_dir}/${asset}" || { rm -rf "${tmp_dir}"; return 1; }
+    _wb_fetch_verified "${url}" "${tmp_dir}/${asset}" \
+        "sums:https://gitlab.com/gitlab-org/cli/-/releases/${ver}/downloads/checksums.txt" \
+        || { rm -rf "${tmp_dir}"; return 1; }
     ${elevation_cmd} zypper install -y "${tmp_dir}/${asset}"
     rm -rf "${tmp_dir}"
 }
@@ -305,7 +407,9 @@ _glab-install-tarball() {
     tmp_dir="$(mktemp -d)"
 
     log_info "Downloading ${asset}..."
-    _download_file_robust "${url}" "${tmp_dir}/${asset}" || { rm -rf "${tmp_dir}"; return 1; }
+    _wb_fetch_verified "${url}" "${tmp_dir}/${asset}" \
+        "sums:https://gitlab.com/gitlab-org/cli/-/releases/${ver}/downloads/checksums.txt" \
+        || { rm -rf "${tmp_dir}"; return 1; }
     if ! tar -xzf "${tmp_dir}/${asset}" -C "${tmp_dir}"; then
         log_error "Archive did not extract — asset naming may have changed upstream again"
         rm -rf "${tmp_dir}"; return 1
@@ -421,7 +525,8 @@ _yq-install-binary() {
     command -v curl &>/dev/null || { log_error "curl is required"; return 1; }
 
     local api_response ver arch url tmp_dir
-    api_response="$(curl -s https://api.github.com/repos/mikefarah/yq/releases/latest)"
+    api_response="$(curl -fsS https://api.github.com/repos/mikefarah/yq/releases/latest)" \
+        || { log_error "yq: could not query the latest release (network or GitHub API rate limit)"; return 1; }
     ver="$(printf '%s' "${api_response}" | grep '"tag_name":' \
         | sed -E 's/.*"tag_name": *"v?([^"]+)".*/\1/' | head -1)"
     [[ -z "${ver}" ]] && { log_error "yq: could not determine latest version"; return 1; }
@@ -432,13 +537,18 @@ _yq-install-binary() {
         *) log_error "yq: unsupported architecture ${WORKBENCH_ARCH}"; return 1 ;;
     esac
 
-    # yq releases a plain binary — no archive to extract
+    # yq releases a plain binary — no archive to extract. Its own `checksums`
+    # file uses a multi-hash layout, so verify against the SHA-256 GitHub
+    # publishes for the asset instead (security review M3). No asset URL from
+    # the API means no digest — refuse rather than guess a URL.
     url="$(_gh_release_asset_url "${api_response}" "yq_linux_${arch}$")"
-    [[ -z "${url}" ]] \
-        && url="https://github.com/mikefarah/yq/releases/download/v${ver}/yq_linux_${arch}"
+    [[ -z "${url}" ]] && { log_error "yq: no yq_linux_${arch} asset in the latest release"; return 1; }
+    local digest
+    digest="$(_wb_gh_asset_digest "${api_response}" "${url}")"
+    [[ -z "${digest}" ]] && { log_error "yq: GitHub publishes no SHA-256 for ${url##*/} — refusing to install"; return 1; }
 
     tmp_dir="$(mktemp -d)"
-    _download_file_robust "${url}" "${tmp_dir}/yq" || { rm -rf "${tmp_dir}"; return 1; }
+    _wb_fetch_verified "${url}" "${tmp_dir}/yq" "${digest}" || { rm -rf "${tmp_dir}"; return 1; }
     mkdir -p "${HOME}/.local/bin"
     install -m 755 "${tmp_dir}/yq" "${HOME}/.local/bin/yq"
     rm -rf "${tmp_dir}"
