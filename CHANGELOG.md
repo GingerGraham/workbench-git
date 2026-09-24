@@ -19,6 +19,25 @@ All notable changes to `workbench-git` are documented here.
   silently dropping anything the user had added themselves (e.g. a
   work-identity include, or a `credential.helper` override). It now removes
   only its own two entries (`--fixed-value`) before re-adding them.
+- **Installer downloads and third-party keys are now verified before use**
+  (findings M3, M4). `install-gh`'s tarball fallback and `install-yq`'s
+  binary install now check the downloaded asset's SHA-256 against the
+  digest GitHub publishes for that release, refusing to install on a
+  mismatch. `install-glab`'s `.deb`/`.rpm`/tarball paths verify against
+  GitLab's own release `checksums.txt`. On Fedora, `install-gh` now
+  prefers the distro's own signed `gh` package over adding GitHub's
+  third-party rpm repo; when it does add that repo, it first verifies the
+  repo's signing key against a pinned fingerprint (`rpm --import` only
+  runs after that check) and constrains the repo to the `gh` package via
+  `includepkgs`. `install-gh`'s Debian/apt path verifies the same pinned
+  fingerprint before installing the downloaded apt keyring.
+- Requires `workbench-core` Core API `>=1.4` (`core_api:` updated) for the
+  new `_wb_fetch_verified`/`_wb_gh_asset_digest`/`_wb_key_has_fingerprint`
+  helpers this depends on.
+
+### Changed
+
+- `core_api:` raised to `">=1.4 <2.0"`.
 
 ## [0.2.0] - 2026-09-22
 
