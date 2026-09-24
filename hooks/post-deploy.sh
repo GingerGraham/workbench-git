@@ -58,11 +58,30 @@ fi
 
 [[ -f "${LOCAL_INC}" ]] || { touch "${LOCAL_INC}"; echo "[INFO] workbench-git: created ${LOCAL_INC}"; }
 
+# Remove only workbench's own include.path entry, then re-add it — never
+# the user's own include.path lines (security review L6). --fixed-value:
+# git >= 2.30. Exit 5 ("no entry matches") is expected on the first run,
+# before workbench has ever added this path; any other nonzero exit (e.g.
+# --fixed-value unsupported on git < 2.30) is a real failure and must not
+# be masked, or this would silently fall through to --add and duplicate
+# the entry on every run.
+_git_unset_own_include() {
+    local path="$1" rc
+    git config --global --fixed-value --unset-all include.path "${path}" 2>/dev/null
+    rc=$?
+    if [[ ${rc} -ne 0 && ${rc} -ne 5 ]]; then
+        echo "[ERROR] workbench-git: 'git config --fixed-value --unset-all' failed (exit ${rc}) for include.path ${path} — is git >= 2.30 installed?" >&2
+        return 1
+    fi
+    return 0
+}
+
 # Point global git config at this module's deployed static content and the
 # two [include] files above — idempotent, safe to re-run.
 git config --global core.excludesfile "${STATIC_DIR}/ignore"
 git config --global core.attributesfile "${STATIC_DIR}/attributes"
-git config --global --unset-all include.path 2>/dev/null || true
+_git_unset_own_include "${LOCAL_INC}" || exit 1
+_git_unset_own_include "${INCLUDES}" || exit 1
 git config --global --add include.path "${LOCAL_INC}"
 git config --global --add include.path "${INCLUDES}"
 
