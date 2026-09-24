@@ -77,7 +77,7 @@ _gh_import_verified_key() {
 # sync with it rather than assuming it stays "gh-cli".
 _gh_repo_gpgkey_and_id() {
     local content
-    content="$(curl -fsS "$1" 2>/dev/null)" || return 1
+    content="$(curl -fsS "$1")" || return 1
     [[ -z "${content}" ]] && return 1
     printf '%s\n' "${content}" | sed -n 's/^gpgkey=//p' | head -1
     printf '%s\n' "${content}" | sed -n 's/^\[\(.*\)\]$/\1/p' | head -1
@@ -320,7 +320,13 @@ _glab-install-arch() {
 
 # Shared: latest glab tag and arch suffix, used by the debian/suse/tarball paths.
 _glab-latest-tag() {
-    curl -fsS "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/releases?order_by=released_at&sort=desc&per_page=1" \
+    local api_response
+    # Captured separately, not piped straight into grep/sed: a pipeline's
+    # exit status is its last command's, so a curl failure would otherwise
+    # be masked by grep/sed succeeding on empty input.
+    api_response="$(curl -fsS "https://gitlab.com/api/v4/projects/gitlab-org%2Fcli/releases?order_by=released_at&sort=desc&per_page=1")" \
+        || return 1
+    printf '%s' "${api_response}" \
         | grep -o '"tag_name": *"[^"]*"' \
         | head -1 \
         | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'
