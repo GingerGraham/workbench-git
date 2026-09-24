@@ -4,6 +4,16 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- **`GITHUB_PERSONAL_ACCESS_TOKEN` is no longer exported by default.** Both
+  the eager, out-of-tree export in `shell/git.sh` and the per-project export
+  in `use git_context` (`files/workbench-git-context.sh`) now require
+  `export WORKBENCH_GIT_CONTEXT_EXPORT_TOKEN=true` in
+  `~/.config/workbench/local/settings.sh` to opt in. An exported token is
+  readable by every process the shell starts and typically carries `repo`
+  and `workflow` scope.
+
 ## [0.2.0] - 2026-09-22
 
 ### Added

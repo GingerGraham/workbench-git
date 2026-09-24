@@ -37,12 +37,14 @@ use_git_context() {
             export GH_CONFIG_DIR="${base}/gh/${ctx}"
             [[ -n "${host}" ]] && export GH_HOST="${host}"
 
-            # Context-aware token export — costs one keyring read per entry
-            # into a project tree. Opt out with
-            # WORKBENCH_GIT_CONTEXT_EXPORT_TOKEN=false in
-            # ~/.config/workbench/local/settings.sh. No glab equivalent:
-            # glab has no non-interactive token-print command matching
-            # `gh auth token`.
+            # Context-aware token export — opt-in (security review M7), off
+            # by default. Enable with
+            #   export WORKBENCH_GIT_CONTEXT_EXPORT_TOKEN=true
+            # in ~/.config/workbench/local/settings.sh. It must be exported:
+            # direnv evaluates .envrc in a child bash process. Costs one
+            # keyring read per entry into a project tree. No glab
+            # equivalent: glab has no non-interactive token-print command
+            # matching `gh auth token`.
             #
             # Always take ownership of GITHUB_PERSONAL_ACCESS_TOKEN here, in
             # both branches — an unauthenticated context must not leave the
@@ -50,7 +52,7 @@ use_git_context() {
             # exported, or anything reading the variable silently acts as
             # the wrong account. direnv snapshots and restores the outer
             # value on leaving the tree, so the unset is scoped correctly.
-            if [[ "${WORKBENCH_GIT_CONTEXT_EXPORT_TOKEN:-true}" == "true" ]] \
+            if [[ "${WORKBENCH_GIT_CONTEXT_EXPORT_TOKEN:-false}" == "true" ]] \
                && command -v gh >/dev/null 2>&1; then
                 local _tok
                 _tok="$(gh auth token 2>/dev/null)"
