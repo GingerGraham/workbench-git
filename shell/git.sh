@@ -1310,8 +1310,17 @@ if [[ -f "$(_git_cli_sentinel_file)" ]] && ! command -v direnv &>/dev/null; then
     log_warn "git: CLI contexts are configured but direnv is not installed — gh/glab credentials will not follow the working directory. Install: https://direnv.net"
 fi
 
-# ── GitHub CLI token export ───────────────────────────────────────────────────
-# Two-tier arrangement:
+# ── GitHub CLI token export (opt-in) ──────────────────────────────────────────
+# Off by default (security review M7). An exported token is readable by every
+# process this shell starts — build tools, test runners, npm lifecycle
+# scripts, AI agents — and a gh token typically carries repo and workflow
+# scope. Opt in with
+#   export WORKBENCH_GIT_CONTEXT_EXPORT_TOKEN=true
+# in ~/.config/workbench/local/settings.sh. Prefer passing the token to the one
+# tool that needs it at launch instead, e.g.
+#   GITHUB_PERSONAL_ACCESS_TOKEN="$(gh auth token)" <tool>
+#
+# When enabled, two tiers:
 #   1. This block runs once, eagerly, at shell start — it sets
 #      GITHUB_PERSONAL_ACCESS_TOKEN from the default (unscoped) gh credential
 #      store, as an out-of-tree fallback for shells that never cd into a
@@ -1322,7 +1331,7 @@ fi
 #      first prompt, after this file is sourced, so its export wins there —
 #      and restores this outer value on leaving the tree.
 # Uses gh auth token directly (local keyring read) — no network call.
-if command -v gh &>/dev/null; then
+if [[ "${WORKBENCH_GIT_CONTEXT_EXPORT_TOKEN:-false}" == "true" ]] && command -v gh &>/dev/null; then
     _gh_token="$(gh auth token 2>/dev/null)"
     if [[ -n "${_gh_token}" ]]; then
         export GITHUB_PERSONAL_ACCESS_TOKEN="${_gh_token}"
