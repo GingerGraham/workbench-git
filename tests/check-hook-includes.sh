@@ -64,6 +64,42 @@ else
     fail "user's entry is not listed first (got: ${first_line})"
 fi
 
+# ── scenario 2: a real `--fixed-value` failure must not be masked ───────────
+# A stub `git` that fails the --fixed-value --unset-all call the way an
+# unsupported git (< 2.30) would, with an exit code that is not git's own
+# "no entry matches" 5 — the hook must fail loudly rather than fall through
+# to --add and duplicate the entry.
+TEST_HOME_2="$(mktemp -d)"
+STUB_BIN="$(mktemp -d)"
+trap 'rm -rf "${TEST_HOME}" "${TEST_HOME_2}" "${STUB_BIN}"' EXIT
+
+REAL_GIT="$(command -v git)"
+cat > "${STUB_BIN}/git" <<STUBEOF
+#!/usr/bin/env bash
+if [[ "\$1" == "config" && "\$2" == "--global" && "\$3" == "--fixed-value" && "\$4" == "--unset-all" ]]; then
+    exit 1
+fi
+exec "${REAL_GIT}" "\$@"
+STUBEOF
+chmod +x "${STUB_BIN}/git"
+
+HOME="${TEST_HOME_2}" PATH="${STUB_BIN}:${PATH}" bash "${HOOK}" >/dev/null 2>/dev/null
+hook_rc=$?
+
+if [[ "${hook_rc}" -ne 0 ]]; then
+    ok "hook exits non-zero when --fixed-value fails for a reason other than 'no match'"
+else
+    fail "hook exited 0 despite a real --fixed-value failure"
+fi
+
+stub_includes="$(HOME="${TEST_HOME_2}" git config --global --get-all include.path 2>/dev/null)"
+stub_local_inc="${TEST_HOME_2}/.config/git/profiles/local.inc"
+if ! grep -qxF "${stub_local_inc}" <<<"${stub_includes}"; then
+    ok "no include.path entry was added after the failed unset (no silent duplicate)"
+else
+    fail "include.path was added despite the failed unset"
+fi
+
 echo
 echo "==============================="
 echo "Total OK/FAIL checks: ${check_no}, failed: ${FAILED}"
