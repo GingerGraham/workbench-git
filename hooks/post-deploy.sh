@@ -62,7 +62,10 @@ fi
 # two [include] files above — idempotent, safe to re-run.
 git config --global core.excludesfile "${STATIC_DIR}/ignore"
 git config --global core.attributesfile "${STATIC_DIR}/attributes"
-git config --global --unset-all include.path 2>/dev/null || true
+# Remove only workbench's own entries, then re-add them — never the user's
+# own include.path lines (security review L6). --fixed-value: git >= 2.30.
+git config --global --fixed-value --unset-all include.path "${LOCAL_INC}" 2>/dev/null || true
+git config --global --fixed-value --unset-all include.path "${INCLUDES}" 2>/dev/null || true
 git config --global --add include.path "${LOCAL_INC}"
 git config --global --add include.path "${INCLUDES}"
 
