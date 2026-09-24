@@ -46,16 +46,16 @@ use_git_context() {
             # equivalent: glab has no non-interactive token-print command
             # matching `gh auth token`.
             #
-            # Always take ownership of GITHUB_PERSONAL_ACCESS_TOKEN here, in
-            # both branches — an unauthenticated context must not leave the
-            # previous context's (or the out-of-tree fallback's) token
+            # Whenever opt-in is on, always take ownership of
+            # GITHUB_PERSONAL_ACCESS_TOKEN below — an unauthenticated
+            # context (no gh token, or gh itself missing) must not leave
+            # the previous context's (or the out-of-tree fallback's) token
             # exported, or anything reading the variable silently acts as
             # the wrong account. direnv snapshots and restores the outer
             # value on leaving the tree, so the unset is scoped correctly.
-            if [[ "${WORKBENCH_GIT_CONTEXT_EXPORT_TOKEN:-false}" == "true" ]] \
-               && command -v gh >/dev/null 2>&1; then
-                local _tok
-                _tok="$(gh auth token 2>/dev/null)"
+            if [[ "${WORKBENCH_GIT_CONTEXT_EXPORT_TOKEN:-false}" == "true" ]]; then
+                local _tok=""
+                command -v gh >/dev/null 2>&1 && _tok="$(gh auth token 2>/dev/null)"
                 if [[ -n "${_tok}" ]]; then
                     export GITHUB_PERSONAL_ACCESS_TOKEN="${_tok}"
                 else
