@@ -92,10 +92,27 @@ use git_context <gh|glab> <context-slug> [host]
 is the one-line `.envrc` contract, backed by
 `~/.config/direnv/lib/workbench-git-context.sh` (deployed by this module).
 It sets `GH_CONFIG_DIR`/`GLAB_CONFIG_DIR` (and `GH_HOST`/`GITLAB_HOST` for a
-non-default host), and for `gh`, re-exports `GITHUB_PERSONAL_ACCESS_TOKEN`
+non-default host), and can, for `gh`, re-export `GITHUB_PERSONAL_ACCESS_TOKEN`
 from that context's own `gh auth token` (a local keyring read, no network
-call) — opt out with `WORKBENCH_GIT_CONTEXT_EXPORT_TOKEN=false` in
-`~/.config/workbench/local/settings.sh`.
+call).
+
+That export is **opt-in, off by default**: an exported token is readable by
+every process the shell starts — build tools, test runners, npm lifecycle
+scripts, AI agents — and a `gh` OAuth token typically carries `repo` and
+`workflow` scope, the account's full reach. Enable it with
+
+```sh
+export WORKBENCH_GIT_CONTEXT_EXPORT_TOKEN=true
+```
+
+in `~/.config/workbench/local/settings.sh` (it must be `export`ed — direnv
+evaluates `.envrc` in a child bash process). This also gates the same
+eager, out-of-tree export in `shell/git.sh`. Prefer passing the token to the
+one tool that needs it at launch instead, when you can:
+
+```sh
+GITHUB_PERSONAL_ACCESS_TOKEN="$(gh auth token)" <tool>
+```
 
 This is wiring only — you still run `gh auth login`/`glab auth login`
 yourself.

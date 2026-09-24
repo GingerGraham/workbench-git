@@ -6,6 +6,19 @@ All notable changes to `workbench-git` are documented here.
 
 ### Security
 
+- **`GITHUB_PERSONAL_ACCESS_TOKEN` is no longer exported by default.** Both
+  the eager, out-of-tree export in `shell/git.sh` and the per-project export
+  in `use git_context` (`files/workbench-git-context.sh`) now require
+  `export WORKBENCH_GIT_CONTEXT_EXPORT_TOKEN=true` in
+  `~/.config/workbench/local/settings.sh` to opt in. An exported token is
+  readable by every process the shell starts and typically carries `repo`
+  and `workflow` scope.
+- **`hooks/post-deploy.sh` no longer deletes the user's own `include.path`
+  entries.** It used to run `git config --global --unset-all include.path`
+  unconditionally on every run, then re-add only workbench's own two paths —
+  silently dropping anything the user had added themselves (e.g. a
+  work-identity include, or a `credential.helper` override). It now removes
+  only its own two entries (`--fixed-value`) before re-adding them.
 - **Installer downloads and third-party keys are now verified before use**
   (findings M3, M4). `install-gh`'s tarball fallback and `install-yq`'s
   binary install now check the downloaded asset's SHA-256 against the
