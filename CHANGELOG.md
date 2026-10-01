@@ -4,6 +4,34 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- **`install-gh` now trusts only the pinned GitHub CLI key(s), stored
+  locally** (review follow-up R1, R2; workbench-core D79). Previously a
+  downloaded key file passed if it merely contained a pinned key, and the
+  whole file was then imported into rpm or installed as the apt keyring, so
+  any extra key in it was trusted too; and the dnf/yum repo kept a remote
+  `gpgkey=https://...`, so a later `dnf -y` would import whatever that URL
+  served. It now uses Core API 1.5's `_wb_dnf_vendor_repo`,
+  `_wb_rpm_import_pinned_key` and `_wb_apt_keyring_pinned`: only the pinned
+  primary keys are kept, the dnf/yum repo points at a local
+  `gpgkey=file://...` copy and is limited to `gh` via `includepkgs`, and the
+  repo file is rewritten on every run, replacing one left by an older
+  version. A vendor key rotation now fails the install until this module
+  ships a new pin.
+
+### Fixed
+
+- **`install-gh` key verification always failed in zsh.** The pinned
+  fingerprints were a space-separated string relied on to word-split, which
+  zsh does not do, so both arrived as one bogus fingerprint. They are now an
+  array.
+
+### Changed
+
+- `core_api:` raised to `">=1.5 <2.0"` for the Core API 1.5 vendor-key
+  helpers.
+
 ## [0.2.1] - 2026-09-24
 
 ### Security

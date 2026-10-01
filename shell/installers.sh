@@ -36,57 +36,22 @@ _gh_release_asset_url() {
 # false-positives on the bare hex; gitleaks:allow is the standard per-line
 # suppression for a verified false positive on a non-secret high-entropy
 # string (see gitleaks docs, "Additional Configuration" — inline comments).
-_GH_CLI_KEY_FPRS="2C6106201985B60E6C7AC87323F3D4EA75716059 7F38BBB59D064DBCB3D84D725612B36462313325" # gitleaks:allow
+# An array, not a space-separated string: zsh does not word-split unquoted
+# expansions, so a string list silently becomes one bogus fingerprint there.
+_GH_CLI_KEY_FPRS=(2C6106201985B60E6C7AC87323F3D4EA75716059 7F38BBB59D064DBCB3D84D725612B36462313325) # gitleaks:allow
 
-# _gh_key_fingerprint_ok <keyfile>
-# True iff <keyfile> contains a primary key matching one of the pinned
-# GitHub CLI packaging fingerprints (security review M4).
-_gh_key_fingerprint_ok() {
-    local keyfile="$1" fpr
-    # shellcheck disable=SC2086  # deliberate word-splitting: a space-separated list
-    for fpr in ${_GH_CLI_KEY_FPRS}; do
-        _wb_key_has_fingerprint "${keyfile}" "${fpr}" && return 0
-    done
-    return 1
-}
-
-# _gh_import_verified_key <key-url>
-# Imports the GitHub CLI packaging key into rpm only if its fingerprint
-# matches one of _GH_CLI_KEY_FPRS (security review M4). Importing first
-# also means dnf/zypper never auto-accept an unchecked key.
-_gh_import_verified_key() {
-    local key_url="$1" tmp elevation_cmd rc
-    elevation_cmd="$(get-elevation-command)" || return 1
-    tmp="$(mktemp)" || return 1
-    _download_file_robust "${key_url}" "${tmp}" || { rm -f "${tmp}"; return 1; }
-    if ! _gh_key_fingerprint_ok "${tmp}"; then
-        log_error "GitHub CLI signing key at ${key_url} does not match a pinned fingerprint — refusing to trust it"
-        rm -f "${tmp}"
-        return 1
-    fi
-    ${elevation_cmd} rpm --import "${tmp}"
-    rc=$?
-    rm -f "${tmp}"
-    return ${rc}
-}
-
-# _gh_repo_gpgkey_and_id <repo-file-url>
-# Fetches a .repo file and prints its gpgkey= value then its [section] id,
-# one per line. Neither is hardcoded — GitHub controls when the key
-# rotates (cli/cli#13118), and reading the id the same way keeps this in
-# sync with it rather than assuming it stays "gh-cli".
-_gh_repo_gpgkey_and_id() {
+# _gh_repo_fields <repo-file-url>
+# Prints three lines from GitHub's published .repo file: its [section] id,
+# baseurl=, and gpgkey=. Read rather than hardcoded because GitHub controls
+# key rotation (cli/cli#13118). Whatever the key URL serves is still only
+# trusted if it matches _GH_CLI_KEY_FPRS.
+_gh_repo_fields() {
     local content
     content="$(curl -fsS "$1")" || return 1
     [[ -z "${content}" ]] && return 1
-    printf '%s\n' "${content}" | sed -n 's/^gpgkey=//p' | head -1
     printf '%s\n' "${content}" | sed -n 's/^\[\(.*\)\]$/\1/p' | head -1
-}
-
-# DNF5 (Fedora 41+) and DNF4 use different config-manager syntax.
-_gh_dnf_is_v5() {
-    command -v dnf5 &>/dev/null && return 0
-    dnf --version 2>/dev/null | head -1 | grep -qiE 'dnf5|^5\.'
+    printf '%s\n' "${content}" | sed -n 's/^baseurl=//p' | head -1
+    printf '%s\n' "${content}" | sed -n 's/^gpgkey=//p' | head -1
 }
 
 _gh-install-rhel() {
@@ -103,30 +68,40 @@ _gh-install-rhel() {
         log_warn "gh not available from Fedora repositories — falling back to the GitHub CLI repo"
     fi
 
-    local gpgkey_url repo_id
-    { read -r gpgkey_url; read -r repo_id; } < <(_gh_repo_gpgkey_and_id "${repo_url}")
-    [[ -z "${gpgkey_url}" ]] && { log_error "Could not read gpgkey= from ${repo_url}"; return 1; }
+    local repo_id baseurl gpgkey_url
+    { read -r repo_id; read -r baseurl; read -r gpgkey_url; } < <(_gh_repo_fields "${repo_url}")
     [[ -z "${repo_id}" ]] && repo_id="gh-cli"
-    _gh_import_verified_key "${gpgkey_url}" || return 1
+    if ! _wb_vendor_id_is_valid "${repo_id}"; then
+        log_error "Repo id '${repo_id}' read from ${repo_url} is not a valid repo id"
+        return 1
+    fi
+    if [[ -z "${baseurl}" || -z "${gpgkey_url}" ]]; then
+        log_error "Could not read baseurl= and gpgkey= from ${repo_url}"
+        return 1
+    fi
+
+    local -a fpr_args=()
+    local fpr
+    for fpr in "${_GH_CLI_KEY_FPRS[@]}"; do
+        fpr_args+=(--fingerprint "${fpr}")
+    done
+
+    # Pinned key stored locally, repo limited to gh (workbench-core D79 —
+    # review follow-up R1, R2). Rewritten on every run, so a repo file added
+    # by an older version of this installer is replaced too.
+    log_info "Configuring GitHub CLI repo..."
+    _wb_dnf_vendor_repo \
+        --id "${repo_id}" \
+        --name "GitHub CLI" \
+        --baseurl "${baseurl}" \
+        --key-url "${gpgkey_url}" \
+        "${fpr_args[@]}" \
+        --include gh \
+        || return 1
 
     if command -v dnf &>/dev/null; then
-        if _gh_dnf_is_v5; then
-            log_info "Configuring GitHub CLI repo (dnf5)..."
-            ${elevation_cmd} dnf install -y dnf5-plugins
-            ${elevation_cmd} dnf config-manager addrepo --from-repofile="${repo_url}" || true
-            ${elevation_cmd} dnf config-manager setopt "${repo_id}".includepkgs=gh
-        else
-            log_info "Configuring GitHub CLI repo (dnf4)..."
-            ${elevation_cmd} dnf install -y 'dnf-command(config-manager)'
-            ${elevation_cmd} dnf config-manager --add-repo "${repo_url}"
-            ${elevation_cmd} dnf config-manager --save --setopt="${repo_id}".includepkgs=gh
-        fi
         ${elevation_cmd} dnf install -y gh
     elif command -v yum &>/dev/null; then
-        log_info "Configuring GitHub CLI repo (yum)..."
-        command -v yum-config-manager &>/dev/null || ${elevation_cmd} yum install -y yum-utils
-        ${elevation_cmd} yum-config-manager --add-repo "${repo_url}"
-        ${elevation_cmd} yum-config-manager --save --setopt="${repo_id}".includepkgs=gh
         ${elevation_cmd} yum install -y gh
     else
         log_error "Neither dnf nor yum found"; return 1
@@ -135,22 +110,11 @@ _gh-install-rhel() {
 
 _gh-install-debian() {
     local elevation_cmd; elevation_cmd="$(get-elevation-command)" || return 1
-    if ! command -v wget &>/dev/null; then
-        log_info "Installing wget (required to fetch the keyring)..."
-        ${elevation_cmd} apt-get update && ${elevation_cmd} apt-get install -y wget
-    fi
+    # Only the pinned key(s) are written to the keyring — never the
+    # downloaded file itself (workbench-core D79, review follow-up R1).
     local keyring="/etc/apt/keyrings/githubcli-archive-keyring.gpg"
-    ${elevation_cmd} mkdir -p -m 755 /etc/apt/keyrings
-    local tmp; tmp="$(mktemp)"
-    if ! wget -nv -O "${tmp}" https://cli.github.com/packages/githubcli-archive-keyring.gpg; then
-        log_error "Failed to download GitHub CLI keyring"; rm -f "${tmp}"; return 1
-    fi
-    if ! _gh_key_fingerprint_ok "${tmp}"; then
-        log_error "GitHub CLI apt keyring does not match a pinned fingerprint — refusing to trust it"
-        rm -f "${tmp}"; return 1
-    fi
-    ${elevation_cmd} install -m 644 "${tmp}" "${keyring}"
-    rm -f "${tmp}"
+    _wb_apt_keyring_pinned "https://cli.github.com/packages/githubcli-archive-keyring.gpg" \
+        "${keyring}" "${_GH_CLI_KEY_FPRS[@]}" || return 1
     ${elevation_cmd} mkdir -p -m 755 /etc/apt/sources.list.d
     echo "deb [arch=$(dpkg --print-architecture) signed-by=${keyring}] https://cli.github.com/packages stable main" \
         | ${elevation_cmd} tee /etc/apt/sources.list.d/github-cli.list >/dev/null
@@ -162,11 +126,14 @@ _gh-install-suse() {
     local elevation_cmd; elevation_cmd="$(get-elevation-command)" || return 1
     local repo_url="https://cli.github.com/packages/rpm/gh-cli.repo"
 
-    local gpgkey_url repo_id
-    { read -r gpgkey_url; read -r repo_id; } < <(_gh_repo_gpgkey_and_id "${repo_url}")
-    [[ -z "${gpgkey_url}" ]] && { log_error "Could not read gpgkey= from ${repo_url}"; return 1; }
+    local repo_id baseurl gpgkey_url
+    { read -r repo_id; read -r baseurl; read -r gpgkey_url; } < <(_gh_repo_fields "${repo_url}")
     [[ -z "${repo_id}" ]] && repo_id="gh-cli"
-    _gh_import_verified_key "${gpgkey_url}" || return 1
+    [[ -z "${gpgkey_url}" ]] && { log_error "Could not read gpgkey= from ${repo_url}"; return 1; }
+
+    # Pinned key imported from a local, verified copy (D79). zypper has no
+    # includepkgs; the --non-interactive refresh below rejects any other key.
+    _wb_rpm_import_pinned_key "${gpgkey_url}" "${repo_id}" "${_GH_CLI_KEY_FPRS[@]}" >/dev/null || return 1
 
     if zypper lr 2>/dev/null | grep -qi "${repo_id}"; then
         log_info "GitHub CLI zypper repo already present"
