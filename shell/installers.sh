@@ -29,16 +29,18 @@ _gh_release_asset_url() {
 
 # GitHub CLI packaging keys — confirmed against cli/cli's docs/install_linux.md
 # (https://github.com/cli/cli/blob/trunk/docs/install_linux.md) on 2026-09-24.
-# Two fingerprints are current at once, a rotation overlap window per that
-# doc and cli/cli#13118: the old key (...716059) expired 2026-09-05, the new
-# key (...313325) has been current since 2026-04-08. Either is trusted.
+# Only the current key (...313325, created 2026-04-07) is pinned. The
+# keyring GitHub serves still carries the old key (...716059), which expired
+# 2026-09-05; _wb_key_extract_pinned drops it with a warning rather than
+# trusting it. A GitHub key rotation makes installs fail until this pin is
+# updated and a module release ships (workbench-core D79) — intended.
 # Public OpenPGP fingerprints, not secrets — gitleaks' generic-api-key rule
 # false-positives on the bare hex; gitleaks:allow is the standard per-line
 # suppression for a verified false positive on a non-secret high-entropy
 # string (see gitleaks docs, "Additional Configuration" — inline comments).
 # An array, not a space-separated string: zsh does not word-split unquoted
 # expansions, so a string list silently becomes one bogus fingerprint there.
-_GH_CLI_KEY_FPRS=(2C6106201985B60E6C7AC87323F3D4EA75716059 7F38BBB59D064DBCB3D84D725612B36462313325) # gitleaks:allow
+_GH_CLI_KEY_FPRS=(7F38BBB59D064DBCB3D84D725612B36462313325) # gitleaks:allow
 
 # _gh_repo_fields <repo-file-url>
 # Prints three lines from GitHub's published .repo file: its [section] id,

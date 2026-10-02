@@ -20,8 +20,9 @@ check_no=0
 ok()   { check_no=$((check_no + 1)); echo "OK:   [$check_no] $*"; }
 fail() { check_no=$((check_no + 1)); echo "FAIL: [$check_no] $*"; FAILED=$((FAILED + 1)); }
 
-FPR_OLD="2C6106201985B60E6C7AC87323F3D4EA75716059"
-FPR_NEW="7F38BBB59D064DBCB3D84D725612B36462313325"
+# Only the current key is pinned; the expired 2026-09-05 key (...716059) is not.
+FPR_EXPIRED="2C6106201985B60E6C7AC87323F3D4EA75716059"
+FPR_PINNED="7F38BBB59D064DBCB3D84D725612B36462313325"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
@@ -36,6 +37,12 @@ if grep -n 'rpm --import' "${SRC}" >/dev/null; then
     fail "shell/installers.sh still calls rpm --import directly"
 else
     ok "shell/installers.sh never calls rpm --import directly"
+fi
+
+if grep -n "^_GH_CLI_KEY_FPRS=" "${SRC}" | grep -q "${FPR_EXPIRED}"; then
+    fail "the expired GitHub CLI key (${FPR_EXPIRED}) is still pinned"
+else
+    ok "the expired GitHub CLI key is not pinned"
 fi
 
 # Driver, sourced by whichever shell is under test. Prints one line per
@@ -91,8 +98,8 @@ run_suite() { # <shell>
     else
         out="$(run_driver "${sh}" rhel gh-cli)"
         case "${out}" in
-            *"--id|gh-cli|"*"--baseurl|https://cli.github.com/packages/rpm|--key-url|https://cli.github.com/packages/githubcli-archive-keyring.gpg|--fingerprint|${FPR_OLD}|--fingerprint|${FPR_NEW}|--include|gh"*)
-                ok "[${sh}] rhel: vendor repo gets id, baseurl, key URL, one --fingerprint per pinned key, --include gh" ;;
+            *"--id|gh-cli|"*"--baseurl|https://cli.github.com/packages/rpm|--key-url|https://cli.github.com/packages/githubcli-archive-keyring.gpg|--fingerprint|${FPR_PINNED}|--include|gh")
+                ok "[${sh}] rhel: vendor repo gets id, baseurl, key URL, exactly one --fingerprint (the current key), --include gh" ;;
             *) fail "[${sh}] rhel: unexpected _wb_dnf_vendor_repo arguments: ${out}" ;;
         esac
 
@@ -105,15 +112,15 @@ run_suite() { # <shell>
 
     out="$(run_driver "${sh}" suse gh-cli)"
     case "${out}" in
-        "rpm_import https://cli.github.com/packages/githubcli-archive-keyring.gpg|gh-cli|${FPR_OLD}|${FPR_NEW}")
-            ok "[${sh}] suse: pinned import gets key URL, repo id and two separate fingerprints" ;;
+        "rpm_import https://cli.github.com/packages/githubcli-archive-keyring.gpg|gh-cli|${FPR_PINNED}")
+            ok "[${sh}] suse: pinned import gets key URL, repo id and only the current fingerprint" ;;
         *) fail "[${sh}] suse: unexpected _wb_rpm_import_pinned_key arguments: ${out}" ;;
     esac
 
     out="$(run_driver "${sh}" debian gh-cli)"
     case "${out}" in
-        "apt_keyring https://cli.github.com/packages/githubcli-archive-keyring.gpg|/etc/apt/keyrings/githubcli-archive-keyring.gpg|${FPR_OLD}|${FPR_NEW}")
-            ok "[${sh}] debian: pinned keyring gets key URL, keyring path and two separate fingerprints" ;;
+        "apt_keyring https://cli.github.com/packages/githubcli-archive-keyring.gpg|/etc/apt/keyrings/githubcli-archive-keyring.gpg|${FPR_PINNED}")
+            ok "[${sh}] debian: pinned keyring gets key URL, keyring path and only the current fingerprint" ;;
         *) fail "[${sh}] debian: unexpected _wb_apt_keyring_pinned arguments: ${out}" ;;
     esac
 }

@@ -19,6 +19,10 @@ All notable changes to `workbench-git` are documented here.
   repo file is rewritten on every run, replacing one left by an older
   version. A vendor key rotation now fails the install until this module
   ships a new pin.
+- **The expired GitHub CLI key is no longer pinned.** Only the current key
+  (`...313325`) is trusted. GitHub's served keyring still carries the old
+  key (`...716059`, expired 2026-09-05); it is dropped with a warning
+  instead of being trusted.
 
 ### Fixed
 
