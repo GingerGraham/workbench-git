@@ -65,7 +65,7 @@ jobs:
     if: needs.guard.outputs.proceed == 'true' && needs.ci.result == 'success'
     permissions:
       contents: read
-    uses: GingerGraham/workbench-core/.github/workflows/module-release.yml@v2.16.0
+    uses: GingerGraham/workbench-core/.github/workflows/module-release.yml@v2.16.1
     with:
       bump_type: ${{ github.event.inputs.bump_type }}
       reason: ${{ github.event.inputs.reason }}
