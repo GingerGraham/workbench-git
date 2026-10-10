@@ -4,6 +4,8 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-10
+
 ### Security
 
 - **`install-gh` now trusts only the pinned GitHub CLI key(s), stored
