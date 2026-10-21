@@ -4,6 +4,8 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-21
+
 ### Fixed
 
 - **A `core.excludesfile` or `core.attributesfile` you set yourself is no
