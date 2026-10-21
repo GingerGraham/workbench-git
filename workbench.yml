@@ -1,16 +1,15 @@
 # workbench.yml — workbench-git
 #
 # Ecosystem module (workbench-core ARCHITECTURE.md §2/§3): git identity and
-# multi-context project management. Meaningless standalone — depends on
-# workbench-core's loader, Core API (elevation/_read_prompt/_str_lower,
-# platform facts, installers-common.sh), and sync engine.
+# multi-context project management. Requires workbench-core only — works
+# without any other workbench module.
 #
 # See contracts/manifest-spec.md (in workbench-core) for the full field
 # reference.
 version: 2
 branch: main
 
-core_api: ">=1.5 <2.0"
+core_api: ">=1.6 <2.0"
 sync:
   enabled: true
 
@@ -20,9 +19,9 @@ info:
 deploy:
   # NOT ~/.config/git/ — that prefix is on workbench-core's dest denylist
   # (contracts/manifest-spec.md §dest validation), a deliberate trust
-  # boundary, not an oversight. core.excludesfile/attributesfile are set
-  # by hooks/post-deploy.sh (and shell/git.sh's git-setup-identity) to
-  # point here instead — see README.md's "File ownership" table.
+  # boundary, not an oversight. core.excludesfile/attributesfile point
+  # here from files/gitconfig, through the gitconfig layer below — see
+  # README.md's "File ownership" table.
   - src: files/attributes
     dest: ~/.local/share/workbench/modules/git/files/attributes
     mode: copy
@@ -51,8 +50,14 @@ register:
       function: get-git-functions
       label: "Git identity, project-context, and CLI-wiring helpers"
 
-hooks:
-  post_deploy:
-    command: ["hooks/post-deploy.sh"]
-    run_on: initial
-    timeout: 60
+layers:
+  # D82: workbench-core adds a block to your ~/.gitconfig that includes
+  # these. Your own settings in ~/.gitconfig always win over the defaults.
+  - tool: gitconfig
+    src: files/gitconfig
+    adopt: [files/legacy/gitconfig-hook]
+  # Per-project identities you created with git-add-project — placed at the
+  # end so they apply inside each project over your global identity.
+  - tool: gitconfig
+    src: files/gitconfig-contexts
+    position: over

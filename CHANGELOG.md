@@ -4,6 +4,29 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **Your `~/.gitconfig` stays yours; workbench-git's defaults sit
+  underneath it** (workbench-core D82). The module now declares two
+  gitconfig layers: workbench-core adds one marked block at the top of
+  `~/.gitconfig` including `files/gitconfig` (`init.defaultBranch`,
+  push/pull behaviour, colour, the excludes and attributes files) and one
+  at the end including `files/gitconfig-contexts` (`profiles/local.inc`
+  and your per-project identities). Anything you set outside the blocks
+  wins. Opt out with `wb files policy git gitconfig skip`. Needs
+  workbench-core 2.19.0 (Core API 1.6).
+- **No post-deploy hook, so no `--allow-hooks`.** On the first update, the
+  lines the old hook wrote into `~/.gitconfig` are removed (after a
+  backup) and replaced by the blocks. `projects.yml` is created by
+  `git-add-project` on first use; `git-list-projects` and
+  `git-sync-projects` say "No projects yet" instead of failing.
+- **`git-setup-identity` writes only the values you enter.** It no longer
+  sets `init.defaultBranch`, `push.autoSetupRemote`, `pull.rebase`,
+  `color.ui` or the excludes/attributes files — those come from the layer.
+- **Works without workbench-shell** (workbench-core D83). With CLI contexts
+  configured, the module hooks direnv into your shell itself when nothing
+  else has.
+
 ## [0.2.3] - 2026-10-21
 
 ### Fixed

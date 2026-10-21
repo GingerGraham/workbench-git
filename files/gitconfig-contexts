@@ -1,0 +1,11 @@
+# workbench-git project contexts (workbench-core docs/decisions-log.md D82).
+#
+# Included from a workbench block at the END of your ~/.gitconfig. These are
+# your own choices, recorded by git-add-project: each project's identity
+# applies only inside that project's directory, so it has to come after
+# your global [user]. profiles/local.inc is yours — machine-local settings
+# that should win everywhere. Missing files are ignored by git.
+
+[include]
+	path = ~/.config/git/profiles/local.inc
+	path = ~/.config/git/project-includes
