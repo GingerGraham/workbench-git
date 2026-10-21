@@ -4,6 +4,14 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A `core.excludesfile` or `core.attributesfile` you set yourself is no
+  longer replaced.** The post-deploy hook and `git-setup-identity` now set
+  each only when it's unset, already workbench's, or points at a
+  byte-identical copy of workbench's file; otherwise they keep yours and
+  say where workbench's is (workbench-core D81, Phase 1 interim).
+
 ## [0.2.2] - 2026-10-10
 
 ### Security

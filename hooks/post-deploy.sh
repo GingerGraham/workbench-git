@@ -58,6 +58,22 @@ fi
 
 [[ -f "${LOCAL_INC}" ]] || { touch "${LOCAL_INC}"; echo "[INFO] workbench-git: created ${LOCAL_INC}"; }
 
+# Set a single-valued global git key only when it is unset, already ours,
+# or points at a byte-identical copy of ours (a dotfiles-era path) — never
+# replace a value the user chose. Interim, docs/decisions-log.md D81 Phase 1
+# in workbench-core; Phase 2 moves this into a core-owned gitconfig layer.
+_wb_git_set_unless_user() {
+    local key="$1" value="$2" current current_path
+    current="$(git config --global --get "${key}" 2>/dev/null)"
+    current_path="${current/#\~/${HOME}}"
+    if [[ -z "${current}" || "${current_path}" == "${value}" ]] \
+        || { [[ -f "${current_path}" && -f "${value}" ]] && cmp -s "${current_path}" "${value}"; }; then
+        git config --global "${key}" "${value}"
+        return 0
+    fi
+    echo "[INFO] workbench-git: keeping your ${key} (${current}); workbench's is at ${value} if you want to merge it" >&2
+}
+
 # Remove only workbench's own include.path entry, then re-add it — never
 # the user's own include.path lines (security review L6). --fixed-value:
 # git >= 2.30. Exit 5 ("no entry matches") is expected on the first run,
@@ -78,8 +94,8 @@ _git_unset_own_include() {
 
 # Point global git config at this module's deployed static content and the
 # two [include] files above — idempotent, safe to re-run.
-git config --global core.excludesfile "${STATIC_DIR}/ignore"
-git config --global core.attributesfile "${STATIC_DIR}/attributes"
+_wb_git_set_unless_user core.excludesfile "${STATIC_DIR}/ignore"
+_wb_git_set_unless_user core.attributesfile "${STATIC_DIR}/attributes"
 _git_unset_own_include "${LOCAL_INC}" || exit 1
 _git_unset_own_include "${INCLUDES}" || exit 1
 git config --global --add include.path "${LOCAL_INC}"
