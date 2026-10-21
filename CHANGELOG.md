@@ -4,6 +4,8 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-21
+
 ### Changed
 
 - **Your `~/.gitconfig` stays yours; workbench-git's defaults sit
