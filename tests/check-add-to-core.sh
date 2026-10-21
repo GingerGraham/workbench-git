@@ -14,10 +14,12 @@
 # shellcheck disable=SC2015,SC2088
 set -uo pipefail
 
-: "${WB:?WB is required}"
-: "${MODULE_NAME:?MODULE_NAME is required}"
-: "${MODULE_URL:?MODULE_URL is required}"
-: "${MODULE_BRANCH:?MODULE_BRANCH is required}"
+# Module CI's structural-tests job also runs every tests/check-*.sh on its
+# own, without a core checkout: nothing to add the module to there.
+if [[ -z "${WB:-}" || -z "${MODULE_NAME:-}" || -z "${MODULE_URL:-}" || -z "${MODULE_BRANCH:-}" ]]; then
+    echo "SKIP: needs WB, MODULE_NAME, MODULE_URL and MODULE_BRANCH — run by workbench-core's module CI ('add to core', step 8)"
+    exit 0
+fi
 
 FAILED=0
 check_no=0
