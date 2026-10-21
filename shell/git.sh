@@ -187,6 +187,22 @@ gwt-cd() {
     fi
 }
 
+# Set a single-valued global git key only when it is unset, already ours,
+# or points at a byte-identical copy of ours (a dotfiles-era path) — never
+# replace a value the user chose. Interim, docs/decisions-log.md D81 Phase 1
+# in workbench-core; Phase 2 moves this into a core-owned gitconfig layer.
+_wb_git_set_unless_user() {
+    local key="$1" value="$2" current current_path
+    current="$(git config --global --get "${key}" 2>/dev/null)"
+    current_path="${current/#\~/${HOME}}"
+    if [[ -z "${current}" || "${current_path}" == "${value}" ]] \
+        || { [[ -f "${current_path}" && -f "${value}" ]] && cmp -s "${current_path}" "${value}"; }; then
+        git config --global "${key}" "${value}"
+        return 0
+    fi
+    echo "[INFO] workbench-git: keeping your ${key} (${current}); workbench's is at ${value} if you want to merge it" >&2
+}
+
 # Interactive one-time setup of the base ~/.gitconfig — replaces what
 # Ansible's gitconfig.j2 rendered in workbench-precursor. Idempotent: safe
 # to re-run, only prompts for values not already set (Enter keeps the
@@ -234,8 +250,8 @@ git-setup-identity() {
     # (contracts/manifest-spec.md §dest validation), so this must match
     # literally.
     local static_dir="${HOME}/.local/share/workbench/modules/git/files"
-    git config --global core.excludesfile "${static_dir}/ignore"
-    git config --global core.attributesfile "${static_dir}/attributes"
+    _wb_git_set_unless_user core.excludesfile "${static_dir}/ignore"
+    _wb_git_set_unless_user core.attributesfile "${static_dir}/attributes"
 
     if [[ -n "${key}" ]]; then
         git config --global user.signingkey "${key}"
