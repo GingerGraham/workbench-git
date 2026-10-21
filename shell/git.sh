@@ -841,7 +841,6 @@ git-add-project() {
         signing_key="$(_gpg_resolve_signing_key "${signing_key}")" || return 1
     fi
 
-    local manifest; manifest="$(_git_manifest)"
     _git_manifest_ensure || return 1
 
     if _git_manifest_project_exists "${context}" "${provider}"; then
