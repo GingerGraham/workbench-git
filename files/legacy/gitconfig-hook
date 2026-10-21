@@ -1,0 +1,4 @@
+core.excludesfile ~/.local/share/workbench/modules/git/files/ignore
+core.attributesfile ~/.local/share/workbench/modules/git/files/attributes
+include.path ~/.config/git/profiles/local.inc
+include.path ~/.config/git/project-includes

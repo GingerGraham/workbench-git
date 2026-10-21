@@ -56,7 +56,7 @@ jobs:
     if: needs.guard.outputs.proceed == 'true'
     permissions:
       contents: read
-    uses: GingerGraham/workbench-core/.github/workflows/module-ci.yml@v2.16.2
+    uses: GingerGraham/workbench-core/.github/workflows/module-ci.yml@v2.19.0
     with:
       module_name: git
 

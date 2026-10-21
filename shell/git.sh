@@ -19,9 +19,11 @@
 # source of truth — so that entire mirror (DOTFILES_REPO_DIR detection, the
 # _git_host_vars_* helpers, and every call site invoking them) is dropped
 # rather than carried forward as permanently-dead code. `projects.yml` is
-# now the *only* source of truth, and `hooks/post-deploy.sh` (this repo,
-# run_on: initial) plus the interactive `git-setup-identity` below replace
-# Ansible's one-time `~/.gitconfig` templating.
+# now the *only* source of truth. Ansible's one-time `~/.gitconfig`
+# templating is replaced by two workbench-core gitconfig layers
+# (workbench.yml `layers:`, workbench-core docs/decisions-log.md D82) for
+# the module's defaults and project contexts, plus the interactive
+# `git-setup-identity` below for the values only you can supply.
 #
 # Projects with a `cli` (gh|glab) set additionally get, via the CLI wiring
 # routine (_git_wire_project_cli):
@@ -187,28 +189,12 @@ gwt-cd() {
     fi
 }
 
-# Set a single-valued global git key only when it is unset, already ours,
-# or points at a byte-identical copy of ours (a dotfiles-era path) — never
-# replace a value the user chose. Interim, docs/decisions-log.md D81 Phase 1
-# in workbench-core; Phase 2 moves this into a core-owned gitconfig layer.
-_wb_git_set_unless_user() {
-    local key="$1" value="$2" current current_path
-    current="$(git config --global --get "${key}" 2>/dev/null)"
-    current_path="${current/#\~/${HOME}}"
-    if [[ -z "${current}" || "${current_path}" == "${value}" ]] \
-        || { [[ -f "${current_path}" && -f "${value}" ]] && cmp -s "${current_path}" "${value}"; }; then
-        git config --global "${key}" "${value}"
-        return 0
-    fi
-    echo "[INFO] workbench-git: keeping your ${key} (${current}); workbench's is at ${value} if you want to merge it" >&2
-}
-
-# Interactive one-time setup of the base ~/.gitconfig — replaces what
-# Ansible's gitconfig.j2 rendered in workbench-precursor. Idempotent: safe
-# to re-run, only prompts for values not already set (Enter keeps the
-# current value). hooks/post-deploy.sh points to this on first install;
-# it is never run automatically, since identity is inherently something
-# only you can supply.
+# Interactive setup of your git identity — the values in ~/.gitconfig only
+# you can supply. Idempotent: safe to re-run, Enter keeps the current value.
+# It is never run automatically. workbench-git's own defaults
+# (init.defaultBranch, push/pull behaviour, excludes and attributes files)
+# are not written here: they come from its gitconfig layer
+# (workbench-core docs/decisions-log.md D82), and anything you set wins.
 git-setup-identity() {
     local cur_name cur_email cur_editor cur_difftool cur_mergetool cur_key
     cur_name="$(git config --global user.name 2>/dev/null)"
@@ -234,30 +220,26 @@ git-setup-identity() {
 
     [[ -z "${name}" || -z "${email}" ]] && { log_error "Name and email are required."; return 1; }
 
+    # Only values you just chose are written to ~/.gitconfig. workbench-git's
+    # own defaults (init.defaultBranch, push/pull behaviour, excludes and
+    # attributes files) come from its gitconfig layer instead
+    # (workbench-core docs/decisions-log.md D82).
     git config --global user.name "${name}"
     git config --global user.email "${email}"
     git config --global core.editor "${editor}"
     git config --global diff.tool "${difftool}"
     git config --global merge.tool "${mergetool}"
-    git config --global init.defaultBranch main
-    git config --global push.autoSetupRemote true
-    git config --global pull.rebase false
-    git config --global color.ui true
-    # NOT ~/.config/git/ — see hooks/post-deploy.sh and README.md's "File
-    # ownership" table for why these live under the module's own state dir.
-    # Deliberately NOT $XDG_DATA_HOME-aware: deploy[].dest is always
-    # anchored at ~/ ($HOME) regardless of $XDG_DATA_HOME
-    # (contracts/manifest-spec.md §dest validation), so this must match
-    # literally.
-    local static_dir="${HOME}/.local/share/workbench/modules/git/files"
-    _wb_git_set_unless_user core.excludesfile "${static_dir}/ignore"
-    _wb_git_set_unless_user core.attributesfile "${static_dir}/attributes"
 
     if [[ -n "${key}" ]]; then
         git config --global user.signingkey "${key}"
         git config --global commit.gpgsign true
         git config --global tag.gpgsign true
     fi
+
+    # A new [user] section lands at the end of ~/.gitconfig, after the
+    # project-contexts block — put the block back last so per-project
+    # identities still win inside each project.
+    _wb_layers_settle git
 
     log_info "Base git identity configured: ${name} <${email}>"
 }
@@ -307,6 +289,24 @@ _wb_alias_availability _git_yq_present \
 
 _git_manifest() {
     echo "${HOME}/.config/git/projects.yml"
+}
+
+# Creates the projects manifest the first time you add a project. Replaces
+# the scaffolding the pre-D82 post-deploy hook did on install.
+_git_manifest_ensure() {
+    local manifest; manifest="$(_git_manifest)"
+    [[ -f "${manifest}" ]] && return 0
+    mkdir -p "$(dirname "${manifest}")" || return 1
+    cat > "${manifest}" <<'EOF'
+# Git projects manifest — source of truth for the live system.
+#
+# Created by git-add-project on first use; never overwritten afterwards.
+# Updated live by: git-add-project, git-update-project, git-remove-project.
+
+projects_base: ~/Projects
+projects: []
+EOF
+    log_info "Created ${manifest}"
 }
 
 _git_includes_file() {
@@ -437,6 +437,8 @@ _git_manifest_remove() {
 # Write (or update) a profile .inc file using git's own config parser.
 _git_write_profile() {
     local profile_path="$1" email="$2" signing_key="${3:-}" name="${4:-}"
+    # profiles/ was created by the pre-D82 post-deploy hook; now on first use.
+    mkdir -p "$(dirname "${profile_path}")" || return 1
     git config --file "${profile_path}" user.email "${email}"
     [[ -n "${name}" ]]        && git config --file "${profile_path}" user.name "${name}"
     if [[ -n "${signing_key}" ]]; then
@@ -761,8 +763,8 @@ git-list-projects() {
     _git_require_yq || return 1
     local manifest; manifest="$(_git_manifest)"
     if [[ ! -f "${manifest}" ]]; then
-        log_warn "No manifest found at ${manifest}. Has the module's post-deploy hook run? Try: wb update git"
-        return 1
+        log_info "No projects yet — add one with git-add-project"
+        return 0
     fi
 
     local count; count=$(yq '.projects | length' "${manifest}")
@@ -839,12 +841,7 @@ git-add-project() {
         signing_key="$(_gpg_resolve_signing_key "${signing_key}")" || return 1
     fi
 
-    local manifest; manifest="$(_git_manifest)"
-    if [[ ! -f "${manifest}" ]]; then
-        log_error "Manifest not found: ${manifest}"
-        log_error "Run: wb update git   (re-runs this module's post-deploy hook)"
-        return 1
-    fi
+    _git_manifest_ensure || return 1
 
     if _git_manifest_project_exists "${context}" "${provider}"; then
         log_warn "Project ${context}/${provider} is already configured."
@@ -1222,9 +1219,8 @@ git-sync-projects() {
     local manifest; manifest="$(_git_manifest)"
 
     if [[ ! -f "${manifest}" ]]; then
-        log_error "Manifest not found: ${manifest}"
-        log_error "Run: wb update git   (re-runs this module's post-deploy hook)"
-        return 1
+        log_info "No projects yet — add one with git-add-project"
+        return 0
     fi
 
     local count; count=$(yq '.projects | length' "${manifest}")
@@ -1317,13 +1313,21 @@ get-git-functions() {
     _get_aliases_in "Git aliases" "" "${_f}"
 }
 
-# ── direnv presence check ─────────────────────────────────────────────────────
+# ── direnv hook for CLI contexts ──────────────────────────────────────────────
 # CLI contexts (gh/glab wiring) rely entirely on direnv to activate per-project
-# — there is no chpwd/PROMPT_COMMAND fallback. Warn once if at least one
-# project has cli set but direnv isn't installed. Gated on the sentinel file
-# rather than a yq read, to keep this eager path cheap.
-if [[ -f "$(_git_cli_sentinel_file)" ]] && ! command -v direnv &>/dev/null; then
-    log_warn "git: CLI contexts are configured but direnv is not installed — gh/glab credentials will not follow the working directory. Install: https://direnv.net"
+# — there is no chpwd/PROMPT_COMMAND fallback. If you have contexts
+# configured and nothing has hooked direnv into this shell yet — your own
+# rc file, workbench-shell, or another setup — hook it here, so this module
+# works on its own (workbench-core docs/decisions-log.md D83). Gated on the
+# sentinel file rather than a yq read, to keep this eager path cheap.
+if [[ -f "$(_git_cli_sentinel_file)" ]]; then
+    if ! command -v direnv &>/dev/null; then
+        log_warn "git: CLI contexts are configured but direnv is not installed — gh/glab credentials will not follow the working directory. Install direnv with your package manager (or install-direnv from workbench-shell)."
+    elif ! _wb_prompt_hook_registered _direnv_hook; then
+        case "${WORKBENCH_SHELL:-}" in
+            bash|zsh) eval "$(direnv hook "${WORKBENCH_SHELL}")" ;;
+        esac
+    fi
 fi
 
 # ── GitHub CLI token export (opt-in) ──────────────────────────────────────────

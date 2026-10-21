@@ -4,8 +4,9 @@
 # tests/check-*.sh convention (no framework). Structural checks only — this
 # repo doesn't carry a full copy of workbench-core's sync engine to test
 # against, so these check what can be verified standalone: the manifest's
-# declared files actually exist, hooks are executable, and the shell surface
-# stays bash-3.2 compatible.
+# declared files actually exist, the module ships no hook (workbench-core
+# D82: everything it once wrote into ~/.gitconfig is a layer now), and the
+# shell surface stays bash-3.2 compatible.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -41,7 +42,7 @@ else
     fail "no manifest found (checked ${_MANIFEST_CANDIDATES})"
 fi
 
-for key in version core_api register deploy hooks; do
+for key in version core_api register deploy layers; do
     if [[ -n "${MANIFEST}" ]] && grep -q "^${key}:" "${MANIFEST}"; then
         ok "manifest declares '${key}:'"
     else
@@ -64,9 +65,18 @@ if [[ -n "${MANIFEST}" ]]; then
     done < <(grep -E '^[[:space:]]*(-[[:space:]]*)?src:' "${MANIFEST}" | sed -E 's/^[[:space:]]*-?[[:space:]]*src:[[:space:]]*//')
 fi
 
-[[ -x "${REPO_ROOT}/hooks/post-deploy.sh" ]] \
-    && ok "hooks/post-deploy.sh is executable" \
-    || fail "hooks/post-deploy.sh is not executable"
+if [[ -n "${MANIFEST}" ]] && grep -q '^hooks:' "${MANIFEST}"; then
+    fail "manifest declares 'hooks:' — workbench-git needs no hook (workbench-core D82)"
+else
+    ok "manifest declares no hooks"
+fi
+if [[ -e "${REPO_ROOT}/hooks" ]]; then fail "hooks/ still exists"; else ok "no hooks/ directory"; fi
+
+if [[ -n "${MANIFEST}" ]] && grep -q '^core_api: ">=1.6 <2.0"$' "${MANIFEST}"; then
+    ok "core_api requires 1.6 (layers, _wb_layers_settle, _wb_prompt_hook_registered)"
+else
+    fail "core_api must be \">=1.6 <2.0\""
+fi
 
 # Bash 3.2 compatibility — same pattern set as workbench-core's own
 # tests/check-bash32-compat.sh.
@@ -83,7 +93,7 @@ for entry in "${_bash32_patterns[@]}"; do
     hit=""
     while IFS= read -r -d '' f; do
         grep -vE '^[[:space:]]*#' "${f}" | grep -qE "${pattern}" && hit="${hit}${f}\n"
-    done < <(find "${REPO_ROOT}/shell" "${REPO_ROOT}/hooks" -type f -print0 2>/dev/null)
+    done < <(find "${REPO_ROOT}/shell" -type f -print0 2>/dev/null)
     if [[ -n "${hit}" ]]; then
         fail "found ${desc} in: $(printf '%b' "${hit}" | tr '\n' ' ')"
     else

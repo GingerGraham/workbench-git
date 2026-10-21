@@ -1,0 +1,18 @@
+# workbench-git defaults (workbench-core docs/decisions-log.md D82).
+#
+# Included from a workbench block at the TOP of your ~/.gitconfig, so
+# anything you set in ~/.gitconfig wins. Don't edit this file — it's
+# replaced on every update. To stop using it:
+#   wb files policy git gitconfig skip
+
+[init]
+	defaultBranch = main
+[push]
+	autoSetupRemote = true
+[pull]
+	rebase = false
+[color]
+	ui = true
+[core]
+	excludesfile = ~/.local/share/workbench/modules/git/files/ignore
+	attributesfile = ~/.local/share/workbench/modules/git/files/attributes
