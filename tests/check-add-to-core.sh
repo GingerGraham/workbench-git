@@ -87,8 +87,14 @@ fi
 # Core's "add to core" step runs only this file with WB/MODULE_* set, so
 # check-yq-availability.sh, which also needs a core, runs from here. It
 # builds its own HOME.
+# A SKIP also exits 0, so it is checked for separately: here it would mean
+# the suite never ran.
 if bash "$(dirname "${BASH_SOURCE[0]}")/check-yq-availability.sh" >"${WORK}/yq-availability.log" 2>&1; then
-    ok "tests/check-yq-availability.sh passed"
+    if grep -q '^SKIP:' "${WORK}/yq-availability.log"; then
+        fail "tests/check-yq-availability.sh skipped instead of running:"
+    else
+        ok "tests/check-yq-availability.sh passed"
+    fi
 else
     fail "tests/check-yq-availability.sh failed:"
 fi
