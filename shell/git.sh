@@ -248,10 +248,9 @@ git-setup-identity() {
 #
 # Internal helpers are prefixed with _git_. Do not call them directly.
 
-# Quiet twin of the check below — reused by both _git_require_yq's loud
-# preflight and every gated function's silent predicate (see
-# _wb_alias_availability below), so "is yq usable" is defined exactly
-# once.
+# Quiet twin of the check in _git_require_yq's loud preflight — reused by
+# both it and every gated function's silent predicate (see the
+# availability block below), so "is yq usable" is defined exactly once.
 _git_yq_present() {
     command -v yq &>/dev/null \
         && yq --version 2>&1 | grep -qE 'version v?4\.'
@@ -273,12 +272,15 @@ _git_require_yq() {
 }
 
 # Availability gating for wb functions/module getters: these project-
-# management functions all require mikefarah/yq v4 and are unusable
-# without it (they all call _git_require_yq themselves) — hide them from
-# listings when yq is missing or the wrong variant, rather than listing
-# functions that will just fail. See workbench-core's
-# docs/module-authoring.md "Declaring function availability".
-_wb_alias_availability _git_yq_present \
+# management functions all require mikefarah/yq v4 and fail immediately
+# without it (they all call _git_require_yq themselves), so they are not
+# presented as usable when yq is missing or the wrong variant. They are
+# still defined and callable. --needs/--install make the listing say what
+# is missing and how to get it: "yq v4 (mikefarah/yq) — install: wb tools
+# install yq". See workbench-core's docs/module-authoring.md "Declaring
+# function availability".
+_wb_alias_availability --needs "yq v4 (mikefarah/yq)" --install yq \
+    _git_yq_present \
     git-list-projects \
     git-add-project \
     git-add-project-cli \

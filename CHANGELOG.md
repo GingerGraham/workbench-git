@@ -4,6 +4,17 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`get-git-functions` now says what the project-management functions
+  need.** Without a working mikefarah/yq v4, the seven yq-dependent
+  functions are listed under "available once tooling is installed" with
+  `yq v4 (mikefarah/yq) — install: wb tools install yq`, instead of only
+  "7 more hidden". They are still defined and callable. Requires
+  workbench-core Core API 1.7 (`core_api: ">=1.7 <2.0"`, workbench-core
+  D86). The README now uses `wb tools install`, not the removed
+  `wb tools update`.
+
 ## [0.3.0] - 2026-10-21
 
 ### Changed
