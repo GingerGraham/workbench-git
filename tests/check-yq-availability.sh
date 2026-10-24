@@ -60,9 +60,10 @@ grep -q '|yq$' "${INSTALLERS_LIST}" 2>/dev/null \
 # ── a PATH with exactly the tools a getter call needs, and no yq ─────────────
 # Don't rely on the runner lacking yq (module CI puts mikefarah/yq on PATH).
 # sleep/kill: core's predicate-timeout watchdog. column: the name lists.
+# uname: core's functions.sh detects the platform when sourced.
 BARE_BIN="${WORK}/bin"
 mkdir -p "${BARE_BIN}"
-for tool in awk basename bash cat column cut dirname env grep head kill mkdir mktemp rm sed sleep sort tr uniq wc; do
+for tool in awk basename bash cat column cut dirname env grep head kill mkdir mktemp rm sed sleep sort tr uname uniq wc; do
     tool_path="$(command -v "${tool}" 2>/dev/null)"
     if [[ -z "${tool_path}" ]]; then
         fail "'${tool}' is not on this runner's PATH (column: Debian/Ubuntu package bsdextrautils)"
