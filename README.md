@@ -26,14 +26,14 @@ wb install --bundle workstation
   `direnv` on `cd` — so `gh`/`glab` authentication follows the working
   directory the same way identity already does. Useful for a personal vs.
   work account on the same provider, or several concurrent client accounts.
-- `install-gh`, `install-glab`, `install-yq` — via `wb tools update` (see
-  `shell/installers.sh`).
+- `install-gh`, `install-glab`, `install-yq` — via `wb tools install <name>`
+  (see `shell/installers.sh`).
 
 ## Getting started
 
 ```sh
 wb add git
-wb tools update yq gh glab   # or: wb tools update (installs everything registered)
+wb tools install yq           # one tool per call; also gh, glab. 'wb tools install all' asks first
 git-setup-identity            # interactive: name, email, editor, signing key
 git-add-project Personal GitHub me@example.com
 ```
@@ -214,5 +214,10 @@ in `workbench-core` for how `wb tools` discovers and invokes these.
 
 - `yq` v4 ([mikefarah/yq](https://github.com/mikefarah/yq)) for manifest
   operations — `install-yq` above installs it.
+  Without a working `yq`, `get-git-functions` lists the project-management
+  functions under "available once tooling is installed", with the
+  requirement and the install command. They are still defined; running one
+  prints the specific error. `WORKBENCH_FUNCTIONS_SHOW_ALL=true
+  get-git-functions` shows everything as available.
 - `direnv`, only if you use CLI context wiring (`workbench-shell` provides
   `install-direnv`).

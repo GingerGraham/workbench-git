@@ -72,10 +72,10 @@ else
 fi
 if [[ -e "${REPO_ROOT}/hooks" ]]; then fail "hooks/ still exists"; else ok "no hooks/ directory"; fi
 
-if [[ -n "${MANIFEST}" ]] && grep -q '^core_api: ">=1.6 <2.0"$' "${MANIFEST}"; then
-    ok "core_api requires 1.6 (layers, _wb_layers_settle, _wb_prompt_hook_registered)"
+if [[ -n "${MANIFEST}" ]] && grep -q '^core_api: ">=1.7 <2.0"$' "${MANIFEST}"; then
+    ok "core_api requires 1.7 (availability --needs/--install; 1.6 added layers)"
 else
-    fail "core_api must be \">=1.6 <2.0\""
+    fail "core_api must be \">=1.7 <2.0\""
 fi
 
 # Bash 3.2 compatibility — same pattern set as workbench-core's own

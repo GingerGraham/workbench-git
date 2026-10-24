@@ -84,6 +84,16 @@ fi
     && ok "project-includes is included exactly once" \
     || fail "project-includes included $(git config --file "${G}" --includes --get-all include.path | grep -c 'config/git/project-includes') times"
 
+# Core's "add to core" step runs only this file with WB/MODULE_* set, so
+# check-yq-availability.sh, which also needs a core, runs from here. It
+# builds its own HOME.
+if bash "$(dirname "${BASH_SOURCE[0]}")/check-yq-availability.sh" >"${WORK}/yq-availability.log" 2>&1; then
+    ok "tests/check-yq-availability.sh passed"
+else
+    fail "tests/check-yq-availability.sh failed:"
+fi
+cat "${WORK}/yq-availability.log"
+
 echo
 echo "==============================="
 echo "Total OK/FAIL checks: ${check_no}, failed: ${FAILED}"
