@@ -1324,7 +1324,7 @@ get-git-functions() {
 # sentinel file rather than a yq read, to keep this eager path cheap.
 if [[ -f "$(_git_cli_sentinel_file)" ]]; then
     if ! command -v direnv &>/dev/null; then
-        log_warn "git: CLI contexts are configured but direnv is not installed — gh/glab credentials will not follow the working directory. Install direnv with your package manager (or install-direnv from workbench-shell)."
+        log_warn "git: CLI contexts are configured but direnv is not installed — gh/glab credentials will not follow the working directory. Install direnv with your package manager (or 'wb tools install direnv' with workbench-shell registered)."
     elif ! _wb_prompt_hook_registered _direnv_hook; then
         case "${WORKBENCH_SHELL:-}" in
             bash|zsh) eval "$(direnv hook "${WORKBENCH_SHELL}")" ;;
