@@ -26,6 +26,16 @@ if [[ -n "${_glab_version}" ]]; then
         glab completion -s "${WORKBENCH_SHELL}" 2>/dev/null > "${_glab_cache}" \
             || rm -f "${_glab_cache}"
     fi
+
+    # The generated zsh script calls compdef, which needs zsh's completion
+    # system initialised first. Same idempotent guard as workbench-core's
+    # shell/completions/wb.sh: -C reuses the existing dump, so this is a
+    # no-op once compinit has run (e.g. from workbench-shell's zsh.sh).
+    if [[ -n "${ZSH_VERSION:-}" ]] && ! command -v compdef &>/dev/null; then
+        autoload -Uz compinit
+        compinit -C
+    fi
+
     # shellcheck disable=SC1090
     [[ -f "${_glab_cache}" ]] && source "${_glab_cache}"
 fi

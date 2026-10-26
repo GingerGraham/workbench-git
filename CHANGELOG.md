@@ -6,6 +6,11 @@ All notable changes to `workbench-git` are documented here.
 
 ### Fixed
 
+- **zsh with `gh` or `glab` installed no longer prints `command not found:
+  compdef` at start.** Their cached completions are sourced only after
+  zsh's completion system is initialised, with the same guard
+  workbench-core uses for `wb`'s own completions.
+
 - **CLI contexts work the first time you `cd` into the project.** direnv
   blocks a new or changed `.envrc` until it is allowed, so after
   `git-add-project-cli` the context's `GH_CONFIG_DIR` was never set and
