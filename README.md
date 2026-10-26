@@ -26,8 +26,8 @@ wb install --bundle workstation
   `direnv` on `cd` — so `gh`/`glab` authentication follows the working
   directory the same way identity already does. Useful for a personal vs.
   work account on the same provider, or several concurrent client accounts.
-- `install-gh`, `install-glab`, `install-yq` — via `wb tools install <name>`
-  (see `shell/installers.sh`).
+- Installers for `gh`, `glab` and `yq` — `wb tools install <name>` (see
+  `shell/installers.sh`).
 
 ## Getting started
 
@@ -85,9 +85,10 @@ the line.
   (or `wb add git --skip-layer gitconfig`). The project-contexts block is
   `gitconfig:over`.
 - **direnv** is needed only for CLI contexts (`git-add-project-cli`), and
-  any install of it works — your package manager, or `install-direnv` from
-  `workbench-shell`. If nothing else has hooked direnv into your shell,
-  this module hooks it itself once you have a CLI context.
+  any install of it works — your package manager, or `wb tools install
+  direnv` with `workbench-shell` registered. If nothing else has hooked
+  direnv into your shell, this module hooks it itself once you have a CLI
+  context.
 - **workbench-gpg** is optional: with it, a GPG key you pass is resolved
   to its signing subkey (see below).
 
@@ -120,15 +121,6 @@ non-default host), and can, for `gh`, re-export `GITHUB_PERSONAL_ACCESS_TOKEN`
 from that context's own `gh auth token` (a local keyring read, no network
 call).
 
-workbench-git runs `direnv allow` on the `.envrc` each time it writes one
-(or finds it unchanged), so the context is active the first time you `cd`
-in. Before that it checks the values going into the file: the context
-slug must use only `a-z 0-9 . _ -`, the CLI must be `gh` or `glab`, and a
-host must be a hostname with an optional `:port`. The generated `.envrc`
-sources `.envrc.local` when it exists, and direnv only checks the root
-`.envrc` before trusting it, so anything you put in `.envrc.local` runs
-once the generated file is allowed.
-
 That export is **opt-in, off by default**: an exported token is readable by
 every process the shell starts — build tools, test runners, npm lifecycle
 scripts, AI agents — and a `gh` OAuth token typically carries `repo` and
@@ -149,6 +141,19 @@ GITHUB_PERSONAL_ACCESS_TOKEN="$(gh auth token)" <tool>
 
 This is wiring only — you still run `gh auth login`/`glab auth login`
 yourself.
+
+workbench-git runs `direnv allow` on the `.envrc` each time it writes one
+(or finds it unchanged), so the context is active the first time you `cd`
+in. Before that it checks the values going into the file: the context
+slug must use only `a-z 0-9 . _ -`, the CLI must be `gh` or `glab`, and a
+host must be a hostname with an optional `:port`. The generated `.envrc`
+sources `.envrc.local` when it exists, and direnv only checks the root
+`.envrc` before trusting it, so anything you put in `.envrc.local` runs
+once the generated file is allowed.
+
+direnv reads its lib from `${XDG_CONFIG_HOME:-~/.config}/direnv/lib`, so
+with `XDG_CONFIG_HOME` set elsewhere, wiring a project warns and prints the
+`ln -s` that makes the file visible there.
 
 ```sh
 git-add-project-cli <context> <provider> [--cli gh|glab] [--host <hostname>] [--adopt <path>]
@@ -207,26 +212,35 @@ If you have no identity set yet, run this once after `wb add git`.
 
 ## Soft dependency on workbench-gpg
 
-`git-add-project`/`git-update-project --signing-key` resolve a GPG master
-key/fingerprint to its `[S]` signing subkey via `_gpg_resolve_signing_key`
-(`workbench-gpg`), when both `gpg` and that function are present. Without
+`git-setup-identity`, `git-add-project` and `git-update-project
+--signing-key` resolve a GPG master key/fingerprint to its `[S]` signing
+subkey via `gpg-resolve-signing-key` (`workbench-gpg`'s public function for
+other modules), when both `gpg` and that function are present. Without
 `workbench-gpg` installed, a signing key you pass is used as-is (no
 subkey resolution) — this is a soft dependency, not a hard `core_api:` one.
 
-## `install-*` functions (`wb tools`)
+Signing is turned on (`commit.gpgsign`, `tag.gpgsign`) only when `gpg` is
+installed. Without it the key is still saved, signing is left off so
+commits keep working, and you get a warning; install gnupg and re-run the
+same command to turn it on.
 
-`install-gh`, `install-glab`, `install-yq` — see
+## Installers (`wb tools`)
+
+`wb tools install gh`, `wb tools install glab`, `wb tools install yq` — see
 [`docs/module-authoring.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/module-authoring.md#declaring-installers-wb-tools)
 in `workbench-core` for how `wb tools` discovers and invokes these.
 
 ## Requires
 
 - `yq` v4 ([mikefarah/yq](https://github.com/mikefarah/yq)) for manifest
-  operations — `install-yq` above installs it.
+  operations — `wb tools install yq` installs it.
   Without a working `yq`, `get-git-functions` lists the project-management
   functions under "available once tooling is installed", with the
   requirement and the install command. They are still defined; running one
   prints the specific error. `WORKBENCH_FUNCTIONS_SHOW_ALL=true
   get-git-functions` shows everything as available.
 - `direnv`, only if you use CLI context wiring (`workbench-shell` provides
-  `install-direnv`).
+  `wb tools install direnv`).
+- `gh` or `glab`, only for CLI context wiring. Until the project's CLI is
+  installed, its credential helper isn't written (git would have no
+  helper); install it, then run `git-sync-projects`.

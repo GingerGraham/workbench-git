@@ -8,6 +8,8 @@
 # under one "yq v4 (mikefarah/yq)" header with the install command; with
 # v4 they are listed normally; they stay callable either way; and the check
 # is not cached, so installing yq and rerunning works in the same shell.
+# git-add-project-cli also needs gh or glab, so it has a header of its own
+# and is listed once both yq v4 and a CLI are on PATH.
 #
 # Needs WB, MODULE_NAME, MODULE_URL, MODULE_BRANCH and MODULE_ROOT, set by
 # workbench-core's module CI ("add to core", step 8). That step runs only
@@ -54,11 +56,14 @@ else
 fi
 MAIN_TITLE="[INFO] ${LABEL} — functions:"
 
-GATED="git-add-project git-add-project-cli git-list-projects git-remove-project git-remove-project-cli git-sync-projects git-update-project"
-UNGATED="git-setup-identity gwt gwt-cd"
+GATED="git-add-project git-list-projects git-projects-base git-remove-project git-remove-project-cli git-sync-projects git-update-project"
+CLI_GATED="git-add-project-cli"
+UNGATED="git-cleanup git-setup-identity gwt gwt-cd"
 BLOCK_TITLE="[INFO] ${LABEL} — functions — available once tooling is installed:"
 NEEDS_HEADER="  yq v4 (mikefarah/yq)"
 INSTALL_HEADER="${NEEDS_HEADER} — install: wb tools install yq"
+CLI_NEEDS_HEADER="  yq v4 (mikefarah/yq), and gh or glab"
+CLI_INSTALL_HEADER="${CLI_NEEDS_HEADER} — install: wb tools install yq"
 
 # ── register the module, so core renders its installers.list ─────────────────
 run() { "$@" >"${WORK}/out.log" 2>&1 || { echo "--- $* failed:"; cat "${WORK}/out.log"; return 1; }; }
@@ -94,12 +99,17 @@ make_yq_stub() {
 }
 WRONG_BIN="${WORK}/yq-wrong"
 V4_BIN="${WORK}/yq-v4"
+GH_BIN="${WORK}/gh"
 make_yq_stub "${WRONG_BIN}" "yq 3.2.3"
 make_yq_stub "${V4_BIN}" "yq (https://github.com/mikefarah/yq/) version v4.44.1"
+mkdir -p "${GH_BIN}"
+printf '#!%s\nexit 0\n' "${BASH}" > "${GH_BIN}/gh"
+chmod +x "${GH_BIN}/gh"
 
 PATH_MISSING="${BARE_BIN}"
 PATH_WRONG="${WRONG_BIN}:${BARE_BIN}"
 PATH_V4="${V4_BIN}:${BARE_BIN}"
+PATH_V4_GH="${V4_BIN}:${GH_BIN}:${BARE_BIN}"
 
 # shell_with <path> <command...>: a fresh subshell with core's function
 # library and shell/git.sh sourced the way the interactive loader does, the
@@ -162,51 +172,58 @@ else
 fi
 
 shell_with "${PATH_MISSING}" get-git-functions
-names_absent main_names "${LOG}" ${GATED} \
-    && ok "yq missing: the seven project functions are not in the main list" \
+names_absent main_names "${LOG}" ${GATED} ${CLI_GATED} \
+    && ok "yq missing: the eight project functions are not in the main list" \
     || { fail "yq missing: a project function is still in the main list"; show "${LOG}"; }
 names_in main_names "${LOG}" ${UNGATED} \
-    && ok "yq missing: git-setup-identity, gwt, gwt-cd are in the main list" \
+    && ok "yq missing: git-cleanup, git-setup-identity, gwt, gwt-cd are in the main list" \
     || { fail "yq missing: an ungated function is missing from the main list"; show "${LOG}"; }
-names_in block_names "${LOG}" ${GATED} \
-    && ok "yq missing: all seven are in the 'available once tooling is installed' block" \
-    || { fail "yq missing: the block does not name all seven"; show "${LOG}"; }
+names_in block_names "${LOG}" ${GATED} ${CLI_GATED} \
+    && ok "yq missing: all eight are in the 'available once tooling is installed' block" \
+    || { fail "yq missing: the block does not name all eight"; show "${LOG}"; }
 
 # ── 2. install hint, with and without an installer ───────────────────────────
-headers="$(block_lines "${LOG}" | grep -v '^    ')"
-[[ "${headers}" == "${INSTALL_HEADER}" ]] \
-    && ok "one header, ending '— install: wb tools install yq'" \
-    || { fail "block header is '${headers}'"; show "${LOG}"; }
+headers="$(block_lines "${LOG}" | grep -v '^    ' | LC_ALL=C sort)"
+[[ "${headers}" == "$(printf '%s\n%s' "${INSTALL_HEADER}" "${CLI_INSTALL_HEADER}" | LC_ALL=C sort)" ]] \
+    && ok "two headers, yq alone and yq with gh or glab, each ending '— install: wb tools install yq'" \
+    || { fail "block headers are '${headers}'"; show "${LOG}"; }
 
 mv "${INSTALLERS_LIST}" "${INSTALLERS_LIST}.aside"
 shell_with "${PATH_MISSING}" get-git-functions
-headers="$(block_lines "${LOG}" | grep -v '^    ')"
-[[ "${headers}" == "${NEEDS_HEADER}" ]] \
-    && ok "no installers.list: header is exactly '${NEEDS_HEADER}', no install suffix" \
-    || { fail "no installers.list: header is '${headers}'"; show "${LOG}"; }
+headers="$(block_lines "${LOG}" | grep -v '^    ' | LC_ALL=C sort)"
+[[ "${headers}" == "$(printf '%s\n%s' "${NEEDS_HEADER}" "${CLI_NEEDS_HEADER}" | LC_ALL=C sort)" ]] \
+    && ok "no installers.list: headers are exactly '${NEEDS_HEADER}' and '${CLI_NEEDS_HEADER}', no install suffix" \
+    || { fail "no installers.list: headers are '${headers}'"; show "${LOG}"; }
 mv "${INSTALLERS_LIST}.aside" "${INSTALLERS_LIST}"
 
 # ── 3. wrong variant ─────────────────────────────────────────────────────────
 shell_with "${PATH_WRONG}" get-git-functions
-names_absent main_names "${LOG}" ${GATED} && names_in block_names "${LOG}" ${GATED} \
-    && ok "yq 3.2.3: the seven are in the block, not the main list" \
-    || { fail "yq 3.2.3: the seven are not all in the block"; show "${LOG}"; }
+names_absent main_names "${LOG}" ${GATED} ${CLI_GATED} && names_in block_names "${LOG}" ${GATED} ${CLI_GATED} \
+    && ok "yq 3.2.3: the eight are in the block, not the main list" \
+    || { fail "yq 3.2.3: the eight are not all in the block"; show "${LOG}"; }
 
-# ── 4. mikefarah/yq v4 ───────────────────────────────────────────────────────
+# ── 4. mikefarah/yq v4, without and with a CLI ───────────────────────────────
 shell_with "${PATH_V4}" get-git-functions
-names_in main_names "${LOG}" ${GATED} && ! has_block "${LOG}" \
-    && ok "yq v4: all seven in the main list, no block" \
-    || { fail "yq v4: not all listed, or a block is printed"; show "${LOG}"; }
+headers="$(block_lines "${LOG}" | grep -v '^    ')"
+names_in main_names "${LOG}" ${GATED} \
+    && [[ "$(block_names "${LOG}")" == "${CLI_GATED}" && "${headers}" == "${CLI_INSTALL_HEADER}" ]] \
+    && ok "yq v4, no gh/glab: the seven in the main list, only git-add-project-cli in the block" \
+    || { fail "yq v4, no gh/glab: wrong split between the main list and the block"; show "${LOG}"; }
+
+shell_with "${PATH_V4_GH}" get-git-functions
+names_in main_names "${LOG}" ${GATED} ${CLI_GATED} && ! has_block "${LOG}" \
+    && ok "yq v4 and gh: all eight in the main list, no block" \
+    || { fail "yq v4 and gh: not all listed, or a block is printed"; show "${LOG}"; }
 
 # ── 5. fix and rerun in one shell ────────────────────────────────────────────
 fix_and_rerun() {
     get-git-functions > "${WORK}/before.log"
-    PATH="${PATH_V4}"
+    PATH="${PATH_V4_GH}"
     get-git-functions > "${WORK}/after.log"
 }
 shell_with "${PATH_MISSING}" fix_and_rerun
-names_in block_names "${WORK}/before.log" ${GATED} \
-    && names_in main_names "${WORK}/after.log" ${GATED} && ! has_block "${WORK}/after.log" \
+names_in block_names "${WORK}/before.log" ${GATED} ${CLI_GATED} \
+    && names_in main_names "${WORK}/after.log" ${GATED} ${CLI_GATED} && ! has_block "${WORK}/after.log" \
     && ok "same shell: block while yq is missing, all listed once yq v4 is on PATH" \
     || { fail "same shell: the listing did not follow yq appearing"; show "${WORK}/before.log"; show "${WORK}/after.log"; }
 
@@ -229,8 +246,8 @@ fi
 # ── 7. WORKBENCH_FUNCTIONS_SHOW_ALL ──────────────────────────────────────────
 show_all() { WORKBENCH_FUNCTIONS_SHOW_ALL=true get-git-functions; }
 shell_with "${PATH_MISSING}" show_all
-names_in main_names "${LOG}" ${GATED} && ! has_block "${LOG}" \
-    && ok "SHOW_ALL=true, yq missing: all seven in the main list, no block" \
+names_in main_names "${LOG}" ${GATED} ${CLI_GATED} && ! has_block "${LOG}" \
+    && ok "SHOW_ALL=true, yq missing: all eight in the main list, no block" \
     || { fail "SHOW_ALL=true: not all listed, or a block is printed"; show "${LOG}"; }
 }
 

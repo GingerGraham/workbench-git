@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shell/git.sh — workbench-git
 # Git tool configuration — aliases and helper functions.
-# Registered at tier: tools (.dotfiles-sync.yml) — sourced unconditionally by
+# Registered at tier: tools (workbench.yml) — sourced unconditionally by
 # the loader; individual functions below guard on `command -v git`/`gh`/
 # `glab` themselves where it matters.
 #
@@ -72,43 +72,56 @@ alias gba="git branch -a"
 alias gbdl="git branch -d"
 alias gbd="git branch -D"
 alias gitkeep='find . -type d -empty -exec touch {}/.gitkeep \;'
-alias git-remove-untracked="git-cleanup"
 alias gitcleanup="git-cleanup"
 
-if command -v gh &>/dev/null; then
-    _gh_copilot_found=false
-    for _gh_ext_dir in \
-        "${HOME}/.local/share/gh/extensions/gh-copilot" \
-        "${HOME}/.config/gh/extensions/gh-copilot"; do
-        [[ -d "${_gh_ext_dir}" ]] && { _gh_copilot_found=true; break; }
-    done
-    if [[ "${_gh_copilot_found}" == "true" ]]; then
-        alias copilot="gh copilot"
-        alias upgrade-copilot="gh extension upgrade gh-copilot"
-    fi
-    unset _gh_copilot_found _gh_ext_dir
+_git_gh_copilot_present() {
+    command -v gh &>/dev/null || return 1
+    [[ -d "${HOME}/.local/share/gh/extensions/gh-copilot" \
+        || -d "${HOME}/.config/gh/extensions/gh-copilot" ]]
+}
+_wb_alias_availability --needs "gh with the gh-copilot extension" --install gh \
+    _git_gh_copilot_present copilot upgrade-copilot
+
+if _git_gh_copilot_present; then
+    # Not over a real `copilot` on PATH: workbench-ai installs GitHub's
+    # standalone Copilot CLI under that name.
+    case "$(command -v copilot 2>/dev/null)" in
+        /*) ;;
+        *)  alias copilot="gh copilot" ;;
+    esac
+    alias upgrade-copilot="gh extension upgrade gh-copilot"
 fi
 
 # ── functions: git helpers ────────────────────────────────────────────────────
 
 # Remove local branches whose remote tracking branch is gone.
 git-cleanup() {
-    git fetch -p
-    for branch in $(git branch -vv | grep ': gone]' | awk '{print $1}'); do
+    local branch
+    git fetch -p || return 1
+    # %(upstream:track) is "[gone]" when the remote branch was deleted.
+    while IFS= read -r branch; do
+        [[ -z "${branch}" ]] && continue
         log_info "Deleting branch ${branch}"
-        git branch -D "${branch}"
-    done
+        git branch -D "${branch}" \
+            || log_warn "Could not delete ${branch} (checked out in a worktree? remove it with: git worktree remove <path>)"
+    done < <(git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads \
+                | awk '$2 == "[gone]" { print $1 }')
 }
+
+# The main worktree's path (the repository root), from any worktree or
+# subdirectory of it. Empty outside a repository.
+_git_main_worktree() { git worktree list --porcelain 2>/dev/null | awk '/^worktree /{ sub(/^worktree /, ""); print; exit }'; }
 
 # Git worktree helper — checkout or create a worktree for a branch.
 #
 # Usage:
-#   gwt <branch>                   Checkout existing branch into .worktrees/
-#   gwt --local <branch>           Use current directory instead of .worktrees/
+#   gwt <branch>                   Checkout existing branch into <repo root>/.worktrees/
+#   gwt --local <branch>           Put it in ./<branch> in the current directory instead
+#                                  (slashes become dashes: feat/x -> ./feat-x)
 #   gwt -b <new-branch> [base]     Create new branch from base (default: current)
 #
 gwt() {
-    local branch use_local=false create_new=false base_branch="" worktree_dir=".worktrees"
+    local branch use_local=false create_new=false base_branch="" worktree_dir
 
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -133,8 +146,17 @@ gwt() {
         echo ""
         echo "Usage: gwt [--local] <branch-name>"
         echo "   or: gwt [--local] -b <new-branch> [base-branch]"
+        echo ""
+        echo "Worktrees go in <repo root>/.worktrees/<branch>; --local puts one in"
+        echo "./<branch> in the current directory. Slashes become dashes (feat/x -> feat-x)."
         return 1
     fi
+
+    worktree_dir="$(_git_main_worktree)"
+    if [[ -z "${worktree_dir}" ]]; then
+        echo "Not in a git repository"; return 1
+    fi
+    worktree_dir="${worktree_dir}/.worktrees"
 
     if [[ "${create_new}" == false ]]; then
         if ! git branch --list "${branch}" | grep -q "${branch}" && \
@@ -146,7 +168,7 @@ gwt() {
 
     local target_dir
     if "${use_local}"; then
-        target_dir="."
+        target_dir="./${branch//\//-}"
     else
         target_dir="${worktree_dir}/${branch//\//-}"
         mkdir -p "${worktree_dir}"
@@ -175,17 +197,47 @@ gwt-cd() {
     fi
 
     if [[ "${branch}" == "main" || "${branch}" == "master" ]]; then
+        # The main worktree, not --show-toplevel: from inside a linked
+        # worktree that names the linked one.
         local repo_root
-        repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+        repo_root="$(_git_main_worktree)"
         if [[ -n "${repo_root}" ]]; then
             cd "${repo_root}" || return 1
         else
             echo "Not in a git repository"; return 1
         fi
-    elif [[ -d ".worktrees/${branch}" ]]; then
-        cd ".worktrees/${branch}" || return 1
     else
-        echo "Worktree for '${branch}' not found"; return 1
+        # Not "path": in zsh that is PATH, so a local one would empty it.
+        local wt_path
+        wt_path="$(git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/${branch}" '
+            /^worktree / { p = substr($0, 10) }
+            $0 == "branch " b { print p; exit }')"
+        if [[ -n "${wt_path}" ]]; then
+            cd "${wt_path}" || return 1
+        else
+            echo "Worktree for '${branch}' not found"; return 1
+        fi
+    fi
+}
+
+# _git_signing_ready — gpg is installed. When it isn't, the key is still
+# saved but signing is left off, so commits keep working.
+_git_signing_ready() {
+    command -v gpg &>/dev/null && return 0
+    log_warn "gpg is not installed: the signing key is saved, but commit and tag signing are left off. Install gnupg, then re-run this to turn signing on."
+    return 1
+}
+
+# _git_resolve_signing_key <key-id>
+# Prints the key to save. With workbench-gpg loaded, gpg-resolve-signing-key
+# (its public interface) turns a master key ID or fingerprint into its [S]
+# signing subkey, the common mistake; it fails when the key has no signing
+# subkey. Without workbench-gpg (or gpg), the key is used as given.
+_git_resolve_signing_key() {
+    if [[ -n "${1:-}" ]] && command -v gpg &>/dev/null && declare -f gpg-resolve-signing-key &>/dev/null; then
+        gpg-resolve-signing-key "$1"
+    else
+        printf '%s\n' "${1:-}"
     fi
 }
 
@@ -219,6 +271,9 @@ git-setup-identity() {
     key="${key:-${cur_key}}"
 
     [[ -z "${name}" || -z "${email}" ]] && { log_error "Name and email are required."; return 1; }
+    if [[ -n "${key}" ]]; then
+        key="$(_git_resolve_signing_key "${key}")" || return 1
+    fi
 
     # Only values you just chose are written to ~/.gitconfig. workbench-git's
     # own defaults (init.defaultBranch, push/pull behaviour, excludes and
@@ -232,8 +287,10 @@ git-setup-identity() {
 
     if [[ -n "${key}" ]]; then
         git config --global user.signingkey "${key}"
-        git config --global commit.gpgsign true
-        git config --global tag.gpgsign true
+        if _git_signing_ready; then
+            git config --global commit.gpgsign true
+            git config --global tag.gpgsign true
+        fi
     fi
 
     # A new [user] section lands at the end of ~/.gitconfig, after the
@@ -281,13 +338,19 @@ _git_require_yq() {
 # function availability".
 _wb_alias_availability --needs "yq v4 (mikefarah/yq)" --install yq \
     _git_yq_present \
+    git-projects-base \
     git-list-projects \
     git-add-project \
-    git-add-project-cli \
     git-remove-project-cli \
     git-update-project \
     git-remove-project \
     git-sync-projects
+
+# git-add-project-cli also needs the CLI it wires. --install names yq, the
+# usual missing piece; gh and glab have their own installers.
+_git_cli_wiring_ready() { _git_yq_present && { command -v gh &>/dev/null || command -v glab &>/dev/null; }; }
+_wb_alias_availability --needs "yq v4 (mikefarah/yq), and gh or glab" --install yq \
+    _git_cli_wiring_ready git-add-project-cli
 
 _git_manifest() {
     echo "${HOME}/.config/git/projects.yml"
@@ -445,8 +508,10 @@ _git_write_profile() {
     [[ -n "${name}" ]]        && git config --file "${profile_path}" user.name "${name}"
     if [[ -n "${signing_key}" ]]; then
         git config --file "${profile_path}" user.signingkey "${signing_key}"
-        git config --file "${profile_path}" commit.gpgsign true
-        git config --file "${profile_path}" tag.gpgsign true
+        if _git_signing_ready; then
+            git config --file "${profile_path}" commit.gpgsign true
+            git config --file "${profile_path}" tag.gpgsign true
+        fi
     fi
 }
 
@@ -618,6 +683,22 @@ _git_update_cli_sentinel() {
     fi
 }
 
+# The deploy (workbench.yml) writes the direnv stdlib file to
+# ~/.config/direnv/lib, but direnv reads ${XDG_CONFIG_HOME:-~/.config}/direnv/lib.
+# Check the deployed file, and when XDG_CONFIG_HOME points elsewhere and
+# nothing is there, say how to link it — once per shell.
+_git_check_direnv_lib() {
+    local deployed="${HOME}/.config/direnv/lib/workbench-git-context.sh"
+    [[ -f "${deployed}" ]] || log_warn "direnv stdlib function missing (${deployed}) — did workbench-git deploy correctly? Run: wb update git"
+    local xdg="${XDG_CONFIG_HOME:-}"
+    xdg="${xdg%/}"
+    [[ -n "${xdg}" && "${xdg}" != "${HOME}/.config" ]] || return 0
+    [[ -e "${xdg}/direnv/lib/workbench-git-context.sh" ]] && return 0
+    [[ "${_GIT_DIRENV_LIB_WARNED:-}" == "true" ]] && return 0
+    _GIT_DIRENV_LIB_WARNED=true
+    log_warn "XDG_CONFIG_HOME is ${xdg}, so direnv looks in ${xdg}/direnv/lib, not ~/.config/direnv/lib where workbench-git deploys its stdlib file. Link it: mkdir -p ${xdg}/direnv/lib && ln -s ${deployed} ${xdg}/direnv/lib/workbench-git-context.sh"
+}
+
 # Idempotent: wire CLI config dir, credential helper, and .envrc for a project.
 #
 # Usage: _git_wire_project_cli <context> <provider> <cli> [host] [skip-adopt-probe]
@@ -628,8 +709,7 @@ _git_update_cli_sentinel() {
 _git_wire_project_cli() {
     local context="$1" provider="$2" cli="$3" host="${4:-}" skip_adopt_probe="${5:-false}"
 
-    local lib="${XDG_CONFIG_HOME:-${HOME}/.config}/direnv/lib/workbench-git-context.sh"
-    [[ -f "${lib}" ]] || log_warn "direnv stdlib function missing (${lib}) — did workbench-git deploy correctly? Run: wb update git"
+    _git_check_direnv_lib
 
     local cli_dir; cli_dir="$(_git_cli_config_dir "${cli}" "${context}")"
     mkdir -p "${cli_dir}"
@@ -639,8 +719,12 @@ _git_wire_project_cli() {
     local profile_name; profile_name="$(_git_profile_name "${context}" "${provider}")"
     local profile_path="${HOME}/.config/git/profiles/${profile_name}.inc"
     if [[ -f "${profile_path}" ]]; then
-        _git_write_credential_helper "${profile_path}" "${cli}" "${host}"
-        log_info "Credential helper: ${profile_path}"
+        if ! command -v "${cli}" &>/dev/null; then
+            log_warn "${cli} is not installed — not changing git's credential helper for this project yet (git would have no helper). Install it (wb tools install ${cli}), then run: git-sync-projects"
+        else
+            _git_write_credential_helper "${profile_path}" "${cli}" "${host}"
+            log_info "Credential helper: ${profile_path}"
+        fi
     else
         log_warn "Profile not found — skipping credential helper: ${profile_path}"
     fi
@@ -794,6 +878,8 @@ _git_regenerate_envrc() {
 git-projects-base() {
     local manifest; manifest="$(_git_manifest)"
     if [[ -f "${manifest}" ]]; then
+        # Without a working yq, fail rather than print an empty path.
+        _git_require_yq || return 1
         local base; base=$(yq '.projects_base' "${manifest}" 2>/dev/null)
         echo "${base/\~/$HOME}"
     else
@@ -876,12 +962,10 @@ git-add-project() {
 
     _git_require_yq || return 1
 
-    # Validate/resolve the signing key — corrects the common mistake of
-    # supplying a master key ID (or its fingerprint) instead of its [S]
-    # signing subkey. Soft dependency on workbench-gpg: only called when gpg
-    # is present and workbench-gpg's _gpg_resolve_signing_key is defined.
-    if [[ -n "${signing_key}" ]] && command -v gpg &>/dev/null && declare -f _gpg_resolve_signing_key &>/dev/null; then
-        signing_key="$(_gpg_resolve_signing_key "${signing_key}")" || return 1
+    # Resolve a master key to its [S] signing subkey when workbench-gpg is
+    # loaded (soft dependency — see _git_resolve_signing_key).
+    if [[ -n "${signing_key}" ]]; then
+        signing_key="$(_git_resolve_signing_key "${signing_key}")" || return 1
     fi
 
     _git_manifest_ensure || return 1
@@ -1131,13 +1215,13 @@ git-update-project() {
                 updated=true; shift 2 ;;
             --signing-key)
                 [[ -z "${2:-}" ]] && { log_error "--signing-key requires a value"; return 1; }
-                local resolved_key="${2}"
-                if command -v gpg &>/dev/null && declare -f _gpg_resolve_signing_key &>/dev/null; then
-                    resolved_key="$(_gpg_resolve_signing_key "${2}")" || return 1
-                fi
+                local resolved_key
+                resolved_key="$(_git_resolve_signing_key "${2}")" || return 1
                 git config --file "${profile_path}" user.signingkey "${resolved_key}"
-                git config --file "${profile_path}" commit.gpgsign true
-                git config --file "${profile_path}" tag.gpgsign true
+                if _git_signing_ready; then
+                    git config --file "${profile_path}" commit.gpgsign true
+                    git config --file "${profile_path}" tag.gpgsign true
+                fi
                 _git_manifest_update_field "${context}" "${provider}" signing_key "${resolved_key}"
                 log_info "Updated signing key → ${resolved_key}"
                 updated=true; shift 2 ;;
