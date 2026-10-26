@@ -4,6 +4,13 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- The "direnv is not installed" warning now points at `wb tools install
+  direnv` rather than `install-direnv`, which can't be called from your
+  shell. Required by workbench-core's module CI clean-shell check (its
+  `docs/decisions-log.md` D94).
+
 ## [0.3.1] - 2026-10-24
 
 ### Fixed
