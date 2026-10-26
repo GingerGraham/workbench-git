@@ -4,6 +4,35 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **CLI contexts work the first time you `cd` into the project.** direnv
+  blocks a new or changed `.envrc` until it is allowed, so after
+  `git-add-project-cli` the context's `GH_CONFIG_DIR` was never set and
+  `gh auth login` stored credentials in the default `~/.config/gh`.
+  workbench-git now runs `direnv allow` on the `.envrc` it generates,
+  including one that is already up to date (a project wired before this
+  fix). Without direnv installed, the `.envrc` is still written and the
+  warning gives the `direnv allow <path>` to run once it is.
+- Because the generated `.envrc` is now allowed automatically, the values
+  written into it are checked first: the context slug must use only
+  `a-z 0-9 . _ -`, the CLI must be `gh` or `glab`, and a host must be a
+  hostname with an optional `:port`. Anything else is refused with an
+  error and no `.envrc` is written. Anything in `.envrc.local` runs once
+  the generated file is allowed (README, "CLI context").
+- **`get-git-functions` lists the functions and aliases in zsh too.** The
+  hand-written getter used `${BASH_SOURCE[0]}`, which zsh doesn't set, so
+  in zsh it printed `(none)`. workbench-core now generates the getter from
+  `register.getters[]` (workbench-core D89). Its headers read
+  `[INFO] Git identity, project-context, and CLI-wiring helpers —
+  functions:` and `… — aliases:`, and it no longer lists itself.
+
+### Changed
+
+- Requires workbench-core Core API 1.8 (`core_api: ">=1.8 <2.0"`) for the
+  generated getter and `_wb_gh_release_asset_url`, which replaces this
+  module's own copy in `install-yq` (workbench-core D90).
+
 ## [0.3.2] - 2026-10-26
 
 ### Fixed

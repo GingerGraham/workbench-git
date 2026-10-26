@@ -120,6 +120,15 @@ non-default host), and can, for `gh`, re-export `GITHUB_PERSONAL_ACCESS_TOKEN`
 from that context's own `gh auth token` (a local keyring read, no network
 call).
 
+workbench-git runs `direnv allow` on the `.envrc` each time it writes one
+(or finds it unchanged), so the context is active the first time you `cd`
+in. Before that it checks the values going into the file: the context
+slug must use only `a-z 0-9 . _ -`, the CLI must be `gh` or `glab`, and a
+host must be a hostname with an optional `:port`. The generated `.envrc`
+sources `.envrc.local` when it exists, and direnv only checks the root
+`.envrc` before trusting it, so anything you put in `.envrc.local` runs
+once the generated file is allowed.
+
 That export is **opt-in, off by default**: an exported token is readable by
 every process the shell starts — build tools, test runners, npm lifecycle
 scripts, AI agents — and a `gh` OAuth token typically carries `repo` and

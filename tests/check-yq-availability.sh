@@ -3,7 +3,8 @@
 # Proves the project-management functions' availability declaration in
 # shell/git.sh (_wb_alias_availability --needs/--install, workbench-core
 # D86) against core's real listing code: without a working mikefarah/yq v4
-# the seven functions leave the main list of get-git-functions and appear
+# the seven functions leave the main list of get-git-functions (the getter
+# core generates from register.getters[], workbench-core D89) and appear
 # under one "yq v4 (mikefarah/yq)" header with the install command; with
 # v4 they are listed normally; they stay callable either way; and the check
 # is not cached, so installing yq and rerunning works in the same shell.
@@ -40,9 +41,22 @@ mkdir -p "${HOME}"
 CORE="$(cd "$(dirname "${WB}")/.." && pwd)"
 GIT_SH="${MODULE_ROOT}/shell/git.sh"
 
+# The getter's label, as core prints it, comes from the manifest.
+# shellcheck source=/dev/null
+source "${CORE}/lib/manifest/parse.sh"
+MANIFEST="$(workbench_resolve_manifest_path "${MODULE_ROOT}")"
+LABEL="$(workbench_manifest_register_getter_entries "${MANIFEST}" \
+    | awk -F'|' '$2 == "get-git-functions" { print $3; exit }')"
+if [[ -n "${LABEL}" ]]; then
+    ok "manifest declares get-git-functions with label '${LABEL}'"
+else
+    fail "no register.getters[] entry for get-git-functions in ${MANIFEST}"
+fi
+MAIN_TITLE="[INFO] ${LABEL} — functions:"
+
 GATED="git-add-project git-add-project-cli git-list-projects git-remove-project git-remove-project-cli git-sync-projects git-update-project"
 UNGATED="git-setup-identity gwt gwt-cd"
-BLOCK_TITLE="[INFO] Git functions — available once tooling is installed:"
+BLOCK_TITLE="[INFO] ${LABEL} — functions — available once tooling is installed:"
 NEEDS_HEADER="  yq v4 (mikefarah/yq)"
 INSTALL_HEADER="${NEEDS_HEADER} — install: wb tools install yq"
 
@@ -88,8 +102,9 @@ PATH_WRONG="${WRONG_BIN}:${BARE_BIN}"
 PATH_V4="${V4_BIN}:${BARE_BIN}"
 
 # shell_with <path> <command...>: a fresh subshell with core's function
-# library and shell/git.sh sourced the way the interactive loader does,
-# then <command...>. Output (stdout and stderr) goes to ${WORK}/getter.log.
+# library and shell/git.sh sourced the way the interactive loader does, the
+# getter defined the way the loader defines it (lib/loader.sh, D89), then
+# <command...>. Output (stdout and stderr) goes to ${WORK}/getter.log.
 shell_with() {
     local path="$1"; shift
     (
@@ -100,14 +115,15 @@ shell_with() {
         source "${CORE}/lib/core/functions.sh"
         # shellcheck source=/dev/null
         source "${GIT_SH}"
+        eval "get-git-functions() { _wb_module_getter '${MODULE_NAME}' get-git-functions; }"
         "$@"
     ) >"${WORK}/getter.log" 2>&1
 }
 
-# The main "Git functions" list and the block below it, one name or header
-# per line. Both end at the first blank line.
+# The main functions list and the block below it, one name or header per
+# line. Both end at the first blank line.
 main_names() {
-    awk '$0 == "[INFO] Git functions:" { f = 1; next } f && /^$/ { exit } f' "$1" \
+    awk -v t="${MAIN_TITLE}" '$0 == t { f = 1; next } f && /^$/ { exit } f' "$1" \
         | tr -s ' \t' '\n' | grep -v '^$'
 }
 block_lines() {
