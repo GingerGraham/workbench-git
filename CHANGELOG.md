@@ -4,6 +4,8 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-26
+
 ### Fixed
 
 - The "direnv is not installed" warning now points at `wb tools install
