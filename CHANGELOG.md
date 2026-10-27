@@ -4,6 +4,16 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`wb tools install yq` on Arch installs mikefarah's yq v4.** Arch's
+  `yq` package is the Python wrapper (kislyuk/yq), not the yq
+  workbench-git needs, and with `yay` present the installer went through
+  the AUR. It now runs `pacman -S --needed --noconfirm go-yq`, Arch's
+  official package for mikefarah's yq, and never uses `yay`. If the
+  Python `yq` is already installed, pacman reports the conflict and the
+  installer falls back to the verified binary in `~/.local/bin`.
+
 ## [1.0.0] - 2026-10-27
 
 ### Fixed

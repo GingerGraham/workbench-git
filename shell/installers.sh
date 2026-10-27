@@ -439,7 +439,8 @@ installed-glab() {
 #   - RHEL 9+: EPEL (attempt and fall through on failure)
 #   - Ubuntu/Debian: apt ships yq 3.x (Python wrapper, wrong tool) — skip apt
 #   - openSUSE: third-party OBS repo only — not worth adding a repo for
-#   - Arch: AUR `yq` package
+#   - Arch: `go-yq` in the official repos (pacman); Arch's `yq` is the
+#     Python wrapper, so never that, and never the AUR
 # Binary install is therefore the primary path for debian and suse.
 
 _yq-install-rhel() {
@@ -463,11 +464,10 @@ _yq-install-rhel() {
 
 _yq-install-arch() {
     local elevation_cmd; elevation_cmd="$(get-elevation-command)" || return 1
-    if command -v yay &>/dev/null; then
-        yay -S --noconfirm yq
-    else
-        ${elevation_cmd} pacman -S --noconfirm yq
-    fi
+    # Arch's `yq` package is the Python wrapper (kislyuk/yq); mikefarah's
+    # v4, which workbench-git needs, is `go-yq` in the official repos. No
+    # AUR, so no yay.
+    ${elevation_cmd} pacman -S --needed --noconfirm go-yq
 }
 
 _yq-install-mac() {
