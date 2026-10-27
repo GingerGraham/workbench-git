@@ -439,7 +439,8 @@ installed-glab() {
 #   - RHEL 9+: EPEL (attempt and fall through on failure)
 #   - Ubuntu/Debian: apt ships yq 3.x (Python wrapper, wrong tool) — skip apt
 #   - openSUSE: third-party OBS repo only — not worth adding a repo for
-#   - Arch: AUR `yq` package
+#   - Arch: `go-yq` in the official repos (pacman); Arch's `yq` is the
+#     Python wrapper, so never that, and never the AUR
 # Binary install is therefore the primary path for debian and suse.
 
 _yq-install-rhel() {
