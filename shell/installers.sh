@@ -463,11 +463,10 @@ _yq-install-rhel() {
 
 _yq-install-arch() {
     local elevation_cmd; elevation_cmd="$(get-elevation-command)" || return 1
-    if command -v yay &>/dev/null; then
-        yay -S --noconfirm yq
-    else
-        ${elevation_cmd} pacman -S --noconfirm yq
-    fi
+    # Arch's `yq` package is the Python wrapper (kislyuk/yq); mikefarah's
+    # v4, which workbench-git needs, is `go-yq` in the official repos. No
+    # AUR, so no yay.
+    ${elevation_cmd} pacman -S --needed --noconfirm go-yq
 }
 
 _yq-install-mac() {
