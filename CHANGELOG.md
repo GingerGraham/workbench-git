@@ -4,6 +4,8 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-27
+
 ### Fixed
 
 - **`wb tools install yq` on Arch installs mikefarah's yq v4.** Arch's
