@@ -4,6 +4,8 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-27
+
 ### Fixed
 
 - **zsh with `gh` or `glab` installed no longer prints `command not found:
