@@ -3,27 +3,13 @@
 # install-gh, install-glab, install-yq and their per-distro helpers.
 # Ported from workbench-precursor's lazy/installers-dev.sh (the gh/glab/yq
 # slice — that file split five ways across Wave C modules, per the module
-# map's own §7 call-out). _download_file_robust/_node_version_at_least come
-# from workbench-core's lib/core/installers-common.sh (Core API, tier:
-# core) — not duplicated here.
+# map's own §7 call-out). _download_file_robust, _node_version_at_least and
+# _wb_gh_release_asset_url come from workbench-core's
+# lib/core/installers-common.sh (Core API, tier: core; the last since Core
+# API 1.8, workbench-core D90) — not duplicated here.
 #
 # WORKBENCH_OS/WORKBENCH_DISTRO are workbench-core Core API platform facts
 # (contracts/core-api.md), replacing the precursor's DOTFILES_OS/DOTFILES_DISTRO.
-
-# _gh_release_asset_url <api_response_json> <extended_regex_pattern>
-# Extracts the first browser_download_url whose filename matches <pattern>.
-# Splits each browser_download_url onto its own line before filtering — a
-# GitHub API response is one unbroken line, so a plain grep+sed here would
-# let a greedy regex match across every asset in the release rather than
-# just the one wanted, silently returning the wrong file.
-_gh_release_asset_url() {
-    local api_response="$1" pattern="$2"
-    printf '%s' "${api_response}" \
-        | grep -Eo '"browser_download_url": *"[^"]+"' \
-        | sed -E 's/.*"(https[^"]+)"/\1/' \
-        | grep -E "${pattern}" \
-        | head -1
-}
 
 # ── GitHub CLI install ────────────────────────────────────────────────────────
 
@@ -510,7 +496,7 @@ _yq-install-binary() {
     # file uses a multi-hash layout, so verify against the SHA-256 GitHub
     # publishes for the asset instead (security review M3). No asset URL from
     # the API means no digest — refuse rather than guess a URL.
-    url="$(_gh_release_asset_url "${api_response}" "yq_linux_${arch}$")"
+    url="$(_wb_gh_release_asset_url "${api_response}" "yq_linux_${arch}$")"
     [[ -z "${url}" ]] && { log_error "yq: no yq_linux_${arch} asset in the latest release"; return 1; }
     local digest
     digest="$(_wb_gh_asset_digest "${api_response}" "${url}")"

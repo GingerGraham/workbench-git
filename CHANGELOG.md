@@ -4,6 +4,90 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **zsh with `gh` or `glab` installed no longer prints `command not found:
+  compdef` at start.** Their cached completions are sourced only after
+  zsh's completion system is initialised, with the same guard
+  workbench-core uses for `wb`'s own completions.
+
+- **CLI contexts work the first time you `cd` into the project.** direnv
+  blocks a new or changed `.envrc` until it is allowed, so after
+  `git-add-project-cli` the context's `GH_CONFIG_DIR` was never set and
+  `gh auth login` stored credentials in the default `~/.config/gh`.
+  workbench-git now runs `direnv allow` on the `.envrc` it generates,
+  including one that is already up to date (a project wired before this
+  fix). Without direnv installed, the `.envrc` is still written and the
+  warning gives the `direnv allow <path>` to run once it is.
+- Because the generated `.envrc` is now allowed automatically, the values
+  written into it are checked first: the context slug must use only
+  `a-z 0-9 . _ -`, the CLI must be `gh` or `glab`, and a host must be a
+  hostname with an optional `:port`. Anything else is refused with an
+  error and no `.envrc` is written. Anything in `.envrc.local` runs once
+  the generated file is allowed (README, "CLI context").
+- **`get-git-functions` lists the functions and aliases in zsh too.** The
+  hand-written getter used `${BASH_SOURCE[0]}`, which zsh doesn't set, so
+  in zsh it printed `(none)`. workbench-core now generates the getter from
+  `register.getters[]` (workbench-core D89). Its headers read
+  `[INFO] Git identity, project-context, and CLI-wiring helpers —
+  functions:` and `… — aliases:`, and it no longer lists itself.
+
+- **`git-cleanup` deletes the right branches.** It read the first column of
+  `git branch -vv`, which is `*` for the current branch and `+` for one
+  checked out in another worktree, so it ran `git branch -D` on the marker
+  (or, unquoted, on file names `*` matched). It now reads each branch's
+  upstream state (`%(upstream:track)` is `[gone]`), stops if `git fetch -p`
+  fails, and warns instead of failing silently when a branch can't be
+  deleted because a worktree has it checked out.
+- **`gwt` and `gwt-cd` agree on where worktrees live.** `gwt` created
+  `.worktrees/` in the current directory and named `feat/x` as `feat-x`,
+  while `gwt-cd` looked for `.worktrees/feat/x` in the current directory.
+  `gwt` now always uses `<repo root>/.worktrees/`, from any subdirectory or
+  worktree, and `gwt-cd` asks git where a branch's worktree is.
+  `gwt-cd main` returns to the main worktree from inside a linked one.
+  `gwt --local <branch>` (which ran `git worktree add .` and always failed)
+  now creates `./<branch>` in the current directory, slashes as dashes.
+- **Setting a signing key no longer breaks every commit on a host without
+  gpg.** `git-setup-identity`, `git-add-project` and `git-update-project
+  --signing-key` save the key either way, but turn on `commit.gpgsign` and
+  `tag.gpgsign` only when gpg is installed, and warn otherwise.
+- **No credential helper pointing at a CLI that isn't installed.** CLI
+  wiring writes the project's `gh`/`glab` credential helper only when that
+  CLI exists (git would otherwise have no helper for the host), and says to
+  install it and run `git-sync-projects`, which writes the helper then.
+- With `XDG_CONFIG_HOME` set to somewhere other than `~/.config`, CLI
+  wiring checks the deployed `~/.config/direnv/lib/workbench-git-context.sh`
+  (it checked the XDG path, where it never is) and warns once, with the
+  `ln -s` to run, that direnv looks in `$XDG_CONFIG_HOME/direnv/lib`.
+- **The `copilot` alias no longer hides a real `copilot`.** It is skipped
+  when a `copilot` command is on `PATH` (workbench-ai installs GitHub's
+  standalone Copilot CLI under that name); `upgrade-copilot` is unchanged.
+- `get-git-functions` says what each function needs:
+  `git-projects-base` is listed under yq v4, `git-add-project-cli` under
+  "yq v4 (mikefarah/yq), and gh or glab", and `copilot`/`upgrade-copilot`
+  under "gh with the gh-copilot extension". `git-projects-base` now fails
+  with the yq error, rather than printing an empty path, when the projects
+  manifest exists but yq doesn't work.
+
+### Changed
+
+- Requires workbench-core Core API 1.8 (`core_api: ">=1.8 <2.0"`) for the
+  generated getter and `_wb_gh_release_asset_url`, which replaces this
+  module's own copy in `install-yq` (workbench-core D90).
+- Signing-key resolution uses workbench-gpg's public
+  `gpg-resolve-signing-key` (when it is defined) instead of its private
+  `_gpg_resolve_signing_key`, and `git-setup-identity` now resolves its key
+  the same way as `git-add-project` and `git-update-project`. Without
+  workbench-gpg the key is used as given, as before.
+- The README says `wb tools install <name>`, not
+  `install-<name>`.
+
+### Removed
+
+- **`git-remove-untracked`** (an alias for `git-cleanup`). The name says it
+  removes untracked files; it force-deletes local branches whose upstream
+  is gone. Use `git-cleanup` (or `gitcleanup`).
+
 ## [0.3.2] - 2026-10-26
 
 ### Fixed
