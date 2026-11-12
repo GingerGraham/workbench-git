@@ -4,6 +4,8 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-11-12
+
 ### Fixed
 
 - **No more host aliases inside module code (workbench-core D110).**
