@@ -202,7 +202,7 @@ gwt-cd() {
         local repo_root
         repo_root="$(_git_main_worktree)"
         if [[ -n "${repo_root}" ]]; then
-            cd "${repo_root}" || return 1
+            builtin cd "${repo_root}" || return 1
         else
             echo "Not in a git repository"; return 1
         fi
@@ -213,7 +213,7 @@ gwt-cd() {
             /^worktree / { p = substr($0, 10) }
             $0 == "branch " b { print p; exit }')"
         if [[ -n "${wt_path}" ]]; then
-            cd "${wt_path}" || return 1
+            builtin cd "${wt_path}" || return 1
         else
             echo "Worktree for '${branch}' not found"; return 1
         fi
@@ -362,7 +362,7 @@ _git_manifest_ensure() {
     local manifest; manifest="$(_git_manifest)"
     [[ -f "${manifest}" ]] && return 0
     mkdir -p "$(dirname "${manifest}")" || return 1
-    cat > "${manifest}" <<'EOF'
+    command cat > "${manifest}" <<'EOF'
 # Git projects manifest — source of truth for the live system.
 #
 # Created by git-add-project on first use; never overwritten afterwards.
@@ -541,7 +541,7 @@ _git_regenerate_includes() {
         done
     } > "${tmp}"
 
-    mv "${tmp}" "${includes_file}"
+    command mv "${tmp}" "${includes_file}"
     log_info "Regenerated: ${includes_file} (${count} projects)"
 }
 
@@ -613,7 +613,7 @@ _git_write_envrc() {
     _git_envrc_values_ok "${slug}" "${cli}" "${host}" || return 1
 
     local content
-    content="$(cat <<EOF
+    content="$(command cat <<EOF
 ${_GIT_ENVRC_MARKER}
 # Per-project overrides belong in .envrc.local (never touched by workbench-git).
 # Regenerate: git-sync-projects   |   Add a project: git-add-project
@@ -624,7 +624,7 @@ source_env_if_exists .envrc.local
 EOF
 )"
 
-    if [[ -f "${envrc_path}" && "$(cat "${envrc_path}" 2>/dev/null)" == "${content}" ]]; then
+    if [[ -f "${envrc_path}" && "$(command cat "${envrc_path}" 2>/dev/null)" == "${content}" ]]; then
         log_debug "Unchanged: ${envrc_path}"
         # Allowed again even when unchanged: a host set up before this fix
         # has the file but was never allowed. direnv allow is idempotent.
@@ -792,12 +792,12 @@ _git_adopt_cli_store() {
         log_error "Adopt source not found: ${src}"
         return 1
     fi
-    if [[ -n "$(ls -A "${dst}" 2>/dev/null)" ]]; then
+    if [[ -n "$(command ls -A "${dst}" 2>/dev/null)" ]]; then
         log_warn "Target already has content — not overwriting: ${dst}"
         return 1
     fi
     mkdir -p "${dst}"
-    cp -R "${src}/." "${dst}/"
+    command cp -R "${src}/." "${dst}/"
     log_info "Adopted ${src} -> ${dst}"
 }
 
@@ -811,11 +811,11 @@ _git_find_adopt_candidate() {
     local c
     if [[ "${cli}" == "gh" ]]; then
         for c in "${HOME}/.config/gh-${slug}" "${HOME}/.config/gh"; do
-            [[ -n "$(ls -A "${c}" 2>/dev/null)" ]] && { echo "${c}"; return 0; }
+            [[ -n "$(command ls -A "${c}" 2>/dev/null)" ]] && { echo "${c}"; return 0; }
         done
     else
         for c in "${HOME}/.config/glab-${slug}" "${HOME}/.config/glab-cli"; do
-            [[ -n "$(ls -A "${c}" 2>/dev/null)" ]] && { echo "${c}"; return 0; }
+            [[ -n "$(command ls -A "${c}" 2>/dev/null)" ]] && { echo "${c}"; return 0; }
         done
     fi
 }
@@ -825,7 +825,7 @@ _git_find_adopt_candidate() {
 # is empty and stdin is a TTY.
 _git_probe_adopt_candidate() {
     local cli="$1" context="$2" cli_dir="$3"
-    [[ -n "$(ls -A "${cli_dir}" 2>/dev/null)" ]] && return 0
+    [[ -n "$(command ls -A "${cli_dir}" 2>/dev/null)" ]] && return 0
     [[ -t 0 ]] || return 0
 
     local active_dir=""
@@ -1026,14 +1026,15 @@ git-add-project() {
             _git_wire_project_cli "${context}" "${provider}" "${chosen_cli}" "${chosen_host}"
             _git_regenerate_envrc
 
-            cat <<CLIEOF
+            local cd_hint; cd_hint="cd $(_git_project_dir "${context}" "${provider}")"
+            command cat <<CLIEOF
 
   CLI wiring complete for ${context}/${provider}.
 
   Authenticate from inside the project tree so the credentials land in the
   right store:
 
-    cd $(_git_project_dir "${context}" "${provider}")
+    ${cd_hint}
     ${chosen_cli} auth login
 
   Verify with:  ${chosen_cli} auth status
@@ -1127,14 +1128,15 @@ git-add-project-cli() {
         _git_regenerate_envrc
     fi
 
-    cat <<CLIEOF
+    local cd_hint; cd_hint="cd $(_git_project_dir "${context}" "${provider}")"
+    command cat <<CLIEOF
 
   CLI wiring complete for ${context}/${provider}.
 
   Authenticate from inside the project tree so the credentials land in the
   right store:
 
-    cd $(_git_project_dir "${context}" "${provider}")
+    ${cd_hint}
     ${cli} auth login
 
   Verify with:  ${cli} auth status
@@ -1318,7 +1320,7 @@ git-remove-project() {
     local existing_cli; existing_cli="$(_git_manifest_field "${context}" "${provider}" cli)"
     [[ -n "${existing_cli}" ]] && _git_unwire_project_cli "${context}" "${provider}" --prompt-delete-dir
 
-    [[ -f "${profile_path}" ]] && { rm "${profile_path}"; log_info "Removed profile: ${profile_path}"; }
+    [[ -f "${profile_path}" ]] && { command rm "${profile_path}"; log_info "Removed profile: ${profile_path}"; }
     _git_manifest_remove "${context}" "${provider}"
     _git_regenerate_includes
     _git_regenerate_envrc
@@ -1395,7 +1397,7 @@ git-sync-projects() {
                 fi
 
                 local adopt_hint=""
-                if [[ "${auth_s}" == "none" && -z "$(ls -A "${cli_dir}" 2>/dev/null)" ]]; then
+                if [[ "${auth_s}" == "none" && -z "$(command ls -A "${cli_dir}" 2>/dev/null)" ]]; then
                     local candidate; candidate="$(_git_find_adopt_candidate "${cli}" "${ctx}")"
                     [[ -n "${candidate}" ]] && adopt_hint=" (candidate store found at ${candidate} — see git-add-project-cli --adopt)"
                 fi

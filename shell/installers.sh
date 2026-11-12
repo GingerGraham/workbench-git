@@ -190,8 +190,8 @@ _gh-install-tarball() {
         tar -xzf "${tmp_dir}/${asset}" -C "${tmp_dir}"
     fi
 
-    local bin; bin="$(find "${tmp_dir}" -type f -path '*/bin/gh' | head -1)"
-    [[ -z "${bin}" ]] && bin="$(find "${tmp_dir}" -type f -name gh -perm -u+x | head -1)"
+    local bin; bin="$(command find "${tmp_dir}" -type f -path '*/bin/gh' | head -1)"
+    [[ -z "${bin}" ]] && bin="$(command find "${tmp_dir}" -type f -name gh -perm -u+x | head -1)"
     if [[ -z "${bin}" ]]; then
         log_error "gh binary not found in archive"; rm -rf "${tmp_dir}"; return 1
     fi
@@ -370,7 +370,7 @@ _glab-install-tarball() {
         rm -rf "${tmp_dir}"; return 1
     fi
 
-    bin="$(find "${tmp_dir}" -type f -name glab -perm -u+x | head -1)"
+    bin="$(command find "${tmp_dir}" -type f -name glab -perm -u+x | head -1)"
     if [[ -z "${bin}" ]]; then
         log_error "glab binary not found in archive"; rm -rf "${tmp_dir}"; return 1
     fi
