@@ -4,6 +4,17 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **No more host aliases inside module code (workbench-core D110).**
+  `gwt-cd` used a bare `cd`, and `shell/git.sh` and `shell/installers.sh`
+  called `ls`, `cat`, `cp`, `mv`, `rm` and `find` bare, so a host profile's
+  `cd` function, zoxide, `eza` or `bat` ran inside workbench code. They are
+  now `builtin cd` and `command ...`. The `cd <dir>` hint that
+  `git-add-project` and `git-add-project-cli` print is unchanged. Adds
+  `tests/check-no-bare-cd.sh` and `tests/check-cd-wrapper.sh` to keep it
+  that way.
+
 ### Changed
 
 - **Bug report template asks for OS family and environment separately.**
