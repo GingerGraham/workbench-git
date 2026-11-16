@@ -227,7 +227,7 @@ same command to turn it on.
 ## Installers (`wb tools`)
 
 `wb tools install gh`, `wb tools install glab`, `wb tools install yq` — see
-[`docs/module-authoring.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/module-authoring.md#declaring-installers-wb-tools)
+[`docs/guide/module-authoring.md`](https://github.com/GingerGraham/workbench-core/blob/main/docs/guide/module-authoring.md#declaring-installers-wb-tools)
 in `workbench-core` for how `wb tools` discovers and invokes these.
 
 ## Requires
