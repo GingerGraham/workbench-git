@@ -334,7 +334,7 @@ _git_require_yq() {
 # presented as usable when yq is missing or the wrong variant. They are
 # still defined and callable. --needs/--install make the listing say what
 # is missing and how to get it: "yq v4 (mikefarah/yq) — install: wb tools
-# install yq". See workbench-core's docs/module-authoring.md "Declaring
+# install yq". See workbench-core's docs/guide/module-authoring.md "Declaring
 # function availability".
 _wb_alias_availability --needs "yq v4 (mikefarah/yq)" --install yq \
     _git_yq_present \

@@ -155,7 +155,7 @@ _gh-install-tarball() {
     [[ -z "${ver}" ]] && { log_error "Could not determine latest gh version (GitHub API rate limit?)"; return 1; }
     ver_num="${ver#v}"
 
-    # Go-style arch naming — see docs/module-authoring.md's normalization
+    # Go-style arch naming — see docs/guide/module-authoring.md's normalization
     # snippet in workbench-core; this is the amd64/arm64 variant.
     local arch ext
     case "${WORKBENCH_ARCH}" in
@@ -237,7 +237,7 @@ install-gh() {
     fi
 }
 
-# See workbench-core docs/module-authoring.md "Reporting install status".
+# See workbench-core docs/guide/module-authoring.md "Reporting install status".
 installed-gh() {
     command -v gh &>/dev/null
 }
