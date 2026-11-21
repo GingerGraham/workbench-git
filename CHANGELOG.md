@@ -4,6 +4,21 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **A project's `ssh_key` is now used.** `git-add-project --ssh-key <path>`
+  and `git-update-project --ssh-key <path|none>` write
+  `core.sshCommand = ssh -i '<path>' -o IdentitiesOnly=yes` into the
+  project's profile, so git over SSH inside that project tree uses that
+  key. Before, the manifest field had a writer that nothing called and no
+  reader, and the README listed SSH auth as out of scope. The key must be
+  a readable file at an absolute or `~/` path with no quote, backtick, `$`,
+  backslash or control character in it; a `.pub` file is accepted with a
+  warning. `git-list-projects` gains an `SSH KEY` column,
+  `git-sync-projects --status` marks a missing key file, and
+  `git-sync-projects` writes the key into a profile it recreates.
+  Fixes #44.
+
 ### Changed
 
 - **Agent and contributor guidance covers the stale-base CHANGELOG trap

@@ -173,16 +173,51 @@ launched from a process that didn't inherit direnv's environment (some IDE
 integrations, some daemons) falls back to the default, unscoped credential
 store.
 
-Out of scope: SSH-based auth, Windows/PowerShell, and context-aware
+Out of scope: Windows/PowerShell, and context-aware
 `gpg-push-github`/`gpg-push-gitlab` (they use the ambient CLI config today).
+For SSH remotes, see [SSH key](#ssh-key) below.
+
+## SSH key
+
+A project can name an SSH private key. Inside that project's directory
+tree, git over SSH uses that key.
+
+```sh
+git-add-project Work GitHub me@work.example --ssh-key "~/.ssh/id_ed25519_work"
+git-update-project Work GitHub --ssh-key "~/.ssh/id_ed25519_work"
+git-update-project Work GitHub --ssh-key none      # remove it
+```
+
+The path is stored as `ssh_key` in `projects.yml`, exactly as you typed it.
+Quote a leading `~/` (as above) to keep it portable; an unquoted one is
+expanded by your shell first. It is written to the project's profile as:
+
+```
+core.sshCommand = ssh -i '<path>' -o IdentitiesOnly=yes
+```
+
+- `IdentitiesOnly=yes` stops `ssh-agent` offering its other keys first,
+  which can authenticate as the wrong account on a forge.
+- The path must be absolute or start with `~/`, and the file must be
+  readable when you set it. A path containing a quote, backtick, `$`,
+  backslash or control character is refused, because the command is run
+  through a shell. A `.pub` file is accepted with a warning: `ssh` can use
+  it only to pick a key already loaded in `ssh-agent`.
+- It applies to `git` commands only. Plain `ssh`, and the `gh`/`glab`
+  credential wiring above, are not affected.
+- `git-list-projects` shows the key in an `SSH KEY` column.
+  `git-sync-projects --status` marks a key file that has gone missing, and
+  `git-sync-projects` writes the key into a profile it has to recreate.
+- `git-add-project` does not overwrite a profile that already exists. For
+  an existing project, use `git-update-project --ssh-key`.
 
 ## Shell functions
 
 ### Project management
 
 ```sh
-git-add-project <context> <provider> <email> [signing-key] [name] [--no-cli]
-git-update-project <context> <provider> [--email <e>] [--signing-key <k>] [--name <n>] [--cli <gh|glab|none>] [--cli-host <hostname>]
+git-add-project <context> <provider> <email> [signing-key] [name] [--no-cli] [--ssh-key <path>]
+git-update-project <context> <provider> [--email <e>] [--signing-key <k>] [--name <n>] [--ssh-key <path|none>] [--cli <gh|glab|none>] [--cli-host <hostname>]
 git-remove-project <context> <provider>
 git-list-projects
 git-sync-projects [--status]
