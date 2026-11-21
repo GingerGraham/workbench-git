@@ -427,7 +427,7 @@ _git_manifest_project_exists() {
 }
 
 _git_manifest_add() {
-    local context="$1" provider="$2" email="$3" signing_key="${4:-}" name="${5:-}"
+    local context="$1" provider="$2" email="$3" signing_key="${4:-}" name="${5:-}" ssh_key="${6:-}"
     local manifest; manifest="$(_git_manifest)"
     [[ "$(yq '.projects' "${manifest}")" == "null" ]] && yq -i '.projects = []' "${manifest}"
     CTX="${context}" PROV="${provider}" EMAIL="${email}" \
@@ -438,6 +438,9 @@ _git_manifest_add() {
         "${manifest}"
     [[ -n "${name}" ]] && CTX="${context}" PROV="${provider}" VAL="${name}" \
         yq -i '(.projects[] | select(.context == env(CTX) and .provider == env(PROV))).name = env(VAL)' \
+        "${manifest}"
+    [[ -n "${ssh_key}" ]] && CTX="${context}" PROV="${provider}" VAL="${ssh_key}" \
+        yq -i '(.projects[] | select(.context == env(CTX) and .provider == env(PROV))).ssh_key = env(VAL)' \
         "${manifest}"
 }
 
@@ -499,9 +502,74 @@ _git_manifest_remove() {
         "${manifest}"
 }
 
+# ── SSH key helpers ───────────────────────────────────────────────────────────
+#
+# A project's optional `ssh_key` is written to its profile .inc as
+# core.sshCommand, so git over SSH inside that project tree uses that key.
+# The path is stored in the manifest as given (a leading ~/ stays portable)
+# and expanded when the profile is written. core.sshCommand is run through a
+# shell, so the path is single-quoted and anything that could break out of
+# the quotes is refused first.
+
+# _git_ssh_key_expand <path> — expand a leading ~/ only.
+_git_ssh_key_expand() {
+    # shellcheck disable=SC2088  # a literal leading ~/ is what is being matched
+    case "$1" in
+        '~/'*) printf '%s\n' "${HOME}/${1#\~/}" ;;
+        *)     printf '%s\n' "$1" ;;
+    esac
+}
+
+# _git_ssh_key_path_safe <expanded-path>
+# Syntax only: absolute, and nothing that could escape the single quotes in
+# core.sshCommand. Does not look at the filesystem.
+_git_ssh_key_path_safe() {
+    local key_path="$1"
+    case "${key_path}" in
+        /*) ;;
+        *) log_error "SSH key path must be absolute or start with ~/, not $(printf '%q' "${key_path}")"; return 1 ;;
+    esac
+    case "${key_path}" in
+        *[[:cntrl:]]*|*\'*|*\"*|*\`*|*\$*|*\\*)
+            log_error "SSH key path must not contain quotes, backticks, \$, backslashes or control characters: $(printf '%q' "${key_path}")"
+            return 1 ;;
+    esac
+}
+
+# _git_ssh_key_check <expanded-path>
+# What git-add-project and git-update-project require of a key the user
+# names: a safe path to a readable file. A .pub file is warned about, not
+# refused: ssh -i accepts one, but only to pick a key already loaded in
+# ssh-agent.
+_git_ssh_key_check() {
+    local key_path="$1"
+    _git_ssh_key_path_safe "${key_path}" || return 1
+    if [[ ! -f "${key_path}" || ! -r "${key_path}" ]]; then
+        log_error "SSH key is not a readable file: ${key_path}"
+        return 1
+    fi
+    case "${key_path}" in
+        *.pub) log_warn "${key_path} looks like a public key. ssh can use it only to pick a key already loaded in ssh-agent; to use a key file directly, give the private key (without .pub)." ;;
+    esac
+    return 0
+}
+
+# _git_write_ssh_command <profile-path> <ssh-key as stored in the manifest>
+# IdentitiesOnly stops ssh-agent offering other keys first, which can
+# authenticate as the wrong account on a forge.
+_git_write_ssh_command() {
+    local profile_path="$1" key_path
+    key_path="$(_git_ssh_key_expand "$2")"
+    if ! _git_ssh_key_path_safe "${key_path}"; then
+        log_warn "SSH key not written to ${profile_path}"
+        return 1
+    fi
+    git config --file "${profile_path}" core.sshCommand "ssh -i '${key_path}' -o IdentitiesOnly=yes"
+}
+
 # Write (or update) a profile .inc file using git's own config parser.
 _git_write_profile() {
-    local profile_path="$1" email="$2" signing_key="${3:-}" name="${4:-}"
+    local profile_path="$1" email="$2" signing_key="${3:-}" name="${4:-}" ssh_key="${5:-}"
     # profiles/ was created by the pre-D82 post-deploy hook; now on first use.
     mkdir -p "$(dirname "${profile_path}")" || return 1
     git config --file "${profile_path}" user.email "${email}"
@@ -513,9 +581,62 @@ _git_write_profile() {
             git config --file "${profile_path}" tag.gpgsign true
         fi
     fi
+    if [[ -n "${ssh_key}" ]]; then
+        _git_write_ssh_command "${profile_path}" "${ssh_key}" || true
+    fi
+}
+
+# ── includeIf value validation ────────────────────────────────────────────────
+#
+# context, provider and projects_base are written into ~/.config/git/
+# project-includes, inside a quoted gitdir: pattern, and context and provider
+# also become directory and profile file names. gitdir: patterns treat
+# * ? [ ] and \ specially, and a quote or newline ends the value, so a stray
+# character changes which directories a project's identity applies to, or
+# breaks the file for every project. Check them before they are written.
+
+# _git_name_ok <label> <value>
+# For a context or provider: letters, digits, space, '.', '_' and '-', not
+# starting with '-' or '.' (which also rules out '.' and '..' as a path
+# part). The letters are listed out, not given as ranges: in some shells and
+# locales a range matches more than ASCII letters.
+_git_name_ok() {
+    local label="$1" value="$2"
+    case "${value}" in
+        '')
+            log_error "${label} must not be empty"
+            return 1 ;;
+        -*|.*)
+            log_error "${label} $(printf '%q' "${value}") must not start with '-' or '.'"
+            return 1 ;;
+        *[!abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\ ._-]*)
+            log_error "${label} $(printf '%q' "${value}") may only use letters, digits, space, '.', '_' and '-'"
+            return 1 ;;
+    esac
+}
+
+# _git_projects_base_ok <expanded-path>
+# For projects_base after ~ expansion: spaces and '/' are fine, control
+# characters (newline included), quotes, backslashes and the gitdir: glob
+# characters * ? [ ] are not.
+_git_projects_base_ok() {
+    local value="$1"
+    case "${value}" in
+        '')
+            log_error "projects_base must not be empty"
+            return 1 ;;
+        *[[:cntrl:]]*|*\"*|*\\*|*\**|*\?*|*\[*|*\]*)
+            log_error "projects_base $(printf '%q' "${value}") must not contain control characters, quotes, backslashes, or the characters * ? [ ]"
+            return 1 ;;
+    esac
 }
 
 # Rebuild ~/.config/git/project-includes from the manifest.
+#
+# A bad projects_base fails the whole run and leaves the existing file as it
+# was: it is in every pattern. A project with a bad context or provider is
+# skipped with a warning and the rest are written, so one hand-edited entry
+# can't take every other project's identity down with it.
 _git_regenerate_includes() {
     local manifest; manifest="$(_git_manifest)"
     local includes_file; includes_file="$(_git_includes_file)"
@@ -524,25 +645,36 @@ _git_regenerate_includes() {
     local projects_base_raw projects_base_exp
     projects_base_raw=$(yq '.projects_base' "${manifest}")
     projects_base_exp="${projects_base_raw/\~/$HOME}"
+    if ! _git_projects_base_ok "${projects_base_exp}"; then
+        log_error "Not regenerating ${includes_file}; fix projects_base in ${manifest}"
+        return 1
+    fi
 
     local count; count=$(yq '.projects | length' "${manifest}")
     local tmp; tmp=$(mktemp)
 
-    {
-        printf '# Generated by workbench-git — do not edit directly.\n'
-        printf '# To add a project: git-add-project <context> <provider> <email>\n\n'
-        local i context provider profile_name
-        for (( i=0; i<count; i++ )); do
-            context=$(yq  ".projects[${i}].context"  "${manifest}")
-            provider=$(yq ".projects[${i}].provider" "${manifest}")
-            profile_name=$(_git_profile_name "${context}" "${provider}")
-            printf '[includeIf "gitdir:%s/%s/%s/"]\n' "${projects_base_exp}" "${context}" "${provider}"
-            printf '    path = ~/.config/git/profiles/%s.inc\n\n' "${profile_name}"
-        done
-    } > "${tmp}"
+    printf '# Generated by workbench-git — do not edit directly.\n' > "${tmp}"
+    printf '# To add a project: git-add-project <context> <provider> <email>\n\n' >> "${tmp}"
+
+    local i context provider profile_name written=0 skipped=0
+    for (( i=0; i<count; i++ )); do
+        context=$(yq  ".projects[${i}].context"  "${manifest}")
+        provider=$(yq ".projects[${i}].provider" "${manifest}")
+        if ! _git_name_ok context "${context}" || ! _git_name_ok provider "${provider}"; then
+            log_warn "Skipping projects[${i}] in ${includes_file}; fix it in ${manifest}"
+            skipped=$((skipped + 1))
+            continue
+        fi
+        profile_name=$(_git_profile_name "${context}" "${provider}")
+        printf '[includeIf "gitdir:%s/%s/%s/"]\n' "${projects_base_exp}" "${context}" "${provider}" >> "${tmp}"
+        printf '    path = ~/.config/git/profiles/%s.inc\n\n' "${profile_name}" >> "${tmp}"
+        written=$((written + 1))
+    done
 
     command mv "${tmp}" "${includes_file}"
-    log_info "Regenerated: ${includes_file} (${count} projects)"
+    log_info "Regenerated: ${includes_file} (${written} projects)"
+    [[ "${skipped}" -eq 0 ]] || log_warn "${skipped} project(s) left out of ${includes_file}: invalid context or provider"
+    return 0
 }
 
 # ── functions: CLI context wiring (gh/glab) ───────────────────────────────────
@@ -904,8 +1036,8 @@ git-list-projects() {
         return 0
     fi
 
-    printf '\n%-20s %-20s %-35s %-42s %s\n' "CONTEXT" "PROVIDER" "EMAIL" "SIGNING KEY" "CLI"
-    printf '%-20s %-20s %-35s %-42s %s\n'   "-------" "--------" "-----" "-----------" "---"
+    printf '\n%-20s %-20s %-35s %-42s %-18s %s\n' "CONTEXT" "PROVIDER" "EMAIL" "SIGNING KEY" "CLI" "SSH KEY"
+    printf '%-20s %-20s %-35s %-42s %-18s %s\n'   "-------" "--------" "-----" "-----------" "---" "-------"
     local i cli host cli_col
     for (( i=0; i<count; i++ )); do
         cli=$(yq  ".projects[${i}].cli // \"\""      "${manifest}")
@@ -917,35 +1049,39 @@ git-list-projects() {
         else
             cli_col="-"
         fi
-        printf '%-20s %-20s %-35s %-42s %s\n' \
+        printf '%-20s %-20s %-35s %-42s %-18s %s\n' \
             "$(yq ".projects[${i}].context"              "${manifest}")" \
             "$(yq ".projects[${i}].provider"             "${manifest}")" \
             "$(yq ".projects[${i}].email"                "${manifest}")" \
             "$(yq ".projects[${i}].signing_key // \"\""  "${manifest}" | sed 's/^$/\(none\)/')" \
-            "${cli_col}"
+            "${cli_col}" \
+            "$(yq ".projects[${i}].ssh_key // \"-\""    "${manifest}")"
     done
     printf '\nProjects base: %s\n\n' "${base}"
 }
 
 # Add a new context/provider project.
 #
-# Usage: git-add-project <context> <provider> <email> [signing-key] [name] [--no-cli]
+# Usage: git-add-project <context> <provider> <email> [signing-key] [name] [--no-cli] [--ssh-key <path>]
 #
 # Creates the directory, profile .inc, updates the manifest and
-# project-includes.
+# project-includes. --ssh-key makes git over SSH inside the project use that
+# private key (core.sshCommand in the profile).
 #
 # When stdin is a TTY and --no-cli was not given, also offers to wire the gh
 # or glab CLI for the new project (see _git_wire_project_cli). --no-cli skips
 # the prompt entirely for scripted use.
 #
 git-add-project() {
-    local no_cli=false
+    local no_cli=false ssh_key=""
     local -a positional=()
-    local a
-    for a in "$@"; do
-        case "${a}" in
-            --no-cli) no_cli=true ;;
-            *) positional+=("${a}") ;;
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --no-cli) no_cli=true; shift ;;
+            --ssh-key)
+                [[ -z "${2:-}" ]] && { log_error "--ssh-key requires a path"; return 1; }
+                ssh_key="$2"; shift 2 ;;
+            *) positional+=("$1"); shift ;;
         esac
     done
     set -- "${positional[@]}"
@@ -954,11 +1090,15 @@ git-add-project() {
     local signing_key="${4:-}" name="${5:-}"
 
     if [[ -z "${context}" || -z "${provider}" || -z "${email}" ]]; then
-        log_error "Usage: git-add-project <context> <provider> <email> [signing-key] [name] [--no-cli]"
+        log_error "Usage: git-add-project <context> <provider> <email> [signing-key] [name] [--no-cli] [--ssh-key <path>]"
         log_error "Example: git-add-project Personal GitHub me@example.com"
         log_error "Example: git-add-project Acme AzureDevOps me@acme.com GPGFINGERPRINT"
         return 1
     fi
+
+    # Both become part of a gitdir: pattern and of directory and file names.
+    _git_name_ok context "${context}" || return 1
+    _git_name_ok provider "${provider}" || return 1
 
     _git_require_yq || return 1
 
@@ -968,7 +1108,14 @@ git-add-project() {
         signing_key="$(_git_resolve_signing_key "${signing_key}")" || return 1
     fi
 
+    if [[ -n "${ssh_key}" ]]; then
+        _git_ssh_key_check "$(_git_ssh_key_expand "${ssh_key}")" || return 1
+    fi
+
     _git_manifest_ensure || return 1
+
+    # Checked before anything is created: it is in every includeIf pattern.
+    _git_projects_base_ok "$(git-projects-base)" || return 1
 
     if _git_manifest_project_exists "${context}" "${provider}"; then
         log_warn "Project ${context}/${provider} is already configured."
@@ -984,13 +1131,13 @@ git-add-project() {
     log_info "Directory: ${project_dir}"
 
     if [[ ! -f "${profile_path}" ]]; then
-        _git_write_profile "${profile_path}" "${email}" "${signing_key}" "${name}"
+        _git_write_profile "${profile_path}" "${email}" "${signing_key}" "${name}" "${ssh_key}"
         log_info "Profile:   ${profile_path}"
     else
         log_warn "Profile already exists (not overwritten): ${profile_path}"
     fi
 
-    _git_manifest_add "${context}" "${provider}" "${email}" "${signing_key}" "${name}"
+    _git_manifest_add "${context}" "${provider}" "${email}" "${signing_key}" "${name}" "${ssh_key}"
     log_info "Manifest:  updated"
 
     _git_regenerate_includes
@@ -1171,14 +1318,15 @@ git-remove-project-cli() {
 # Update fields on an existing project.
 #
 # Usage: git-update-project <context> <provider> [--email <e>] [--signing-key <k>]
-#                            [--name <n>] [--cli <gh|glab|none>] [--cli-host <hostname>]
+#                            [--name <n>] [--ssh-key <path|none>]
+#                            [--cli <gh|glab|none>] [--cli-host <hostname>]
 #
 git-update-project() {
     local context="${1:-}" provider="${2:-}"
     shift 2 2>/dev/null || true
 
     if [[ -z "${context}" || -z "${provider}" ]]; then
-        log_error "Usage: git-update-project <context> <provider> [--email <e>] [--signing-key <k>] [--name <n>] [--cli <gh|glab|none>] [--cli-host <hostname>]"
+        log_error "Usage: git-update-project <context> <provider> [--email <e>] [--signing-key <k>] [--name <n>] [--ssh-key <path|none>] [--cli <gh|glab|none>] [--cli-host <hostname>]"
         return 1
     fi
 
@@ -1195,14 +1343,17 @@ git-update-project() {
     if [[ ! -f "${profile_path}" ]]; then
         log_warn "Profile missing — recreating from manifest."
         local manifest; manifest="$(_git_manifest)"
-        local cur_email cur_key
+        local cur_email cur_key cur_ssh_key
         cur_email=$(CTX="${context}" PROV="${provider}" \
             yq '.projects[] | select(.context == env(CTX) and .provider == env(PROV)) | .email' \
             "${manifest}")
         cur_key=$(CTX="${context}" PROV="${provider}" \
             yq '.projects[] | select(.context == env(CTX) and .provider == env(PROV)) | .signing_key // ""' \
             "${manifest}")
-        _git_write_profile "${profile_path}" "${cur_email}" "${cur_key}"
+        cur_ssh_key=$(CTX="${context}" PROV="${provider}" \
+            yq '.projects[] | select(.context == env(CTX) and .provider == env(PROV)) | .ssh_key // ""' \
+            "${manifest}")
+        _git_write_profile "${profile_path}" "${cur_email}" "${cur_key}" "" "${cur_ssh_key}"
     fi
 
     local updated=false
@@ -1232,6 +1383,23 @@ git-update-project() {
                 git config --file "${profile_path}" user.name "${2}"
                 _git_manifest_update_field "${context}" "${provider}" name "${2}"
                 log_info "Updated name → ${2}"
+                updated=true; shift 2 ;;
+            --ssh-key)
+                [[ -z "${2:-}" ]] && { log_error "--ssh-key requires a path (or none)"; return 1; }
+                if [[ "${2}" == "none" ]]; then
+                    if [[ -z "$(_git_manifest_field "${context}" "${provider}" ssh_key)" ]]; then
+                        log_warn "No SSH key set for ${context}/${provider} — nothing to remove."
+                    else
+                        git config --file "${profile_path}" --unset core.sshCommand 2>/dev/null || true
+                        _git_manifest_del_field "${context}" "${provider}" ssh_key
+                        log_info "Removed SSH key"
+                    fi
+                else
+                    _git_ssh_key_check "$(_git_ssh_key_expand "${2}")" || return 1
+                    _git_write_ssh_command "${profile_path}" "${2}" || return 1
+                    _git_manifest_update_field "${context}" "${provider}" ssh_key "${2}"
+                    log_info "Updated SSH key → ${2}"
+                fi
                 updated=true; shift 2 ;;
             --cli)
                 [[ -z "${2:-}" ]] && { log_error "--cli requires a value (gh|glab|none)"; return 1; }
@@ -1278,7 +1446,7 @@ git-update-project() {
                 fi
                 updated=true; shift 2 ;;
             *)
-                log_error "Unknown option: $1  (valid: --email, --signing-key, --name, --cli, --cli-host)"
+                log_error "Unknown option: $1  (valid: --email, --signing-key, --name, --ssh-key, --cli, --cli-host)"
                 return 1 ;;
         esac
     done
@@ -1362,11 +1530,12 @@ git-sync-projects() {
         local i
         for (( i=0; i<count; i++ )); do
             local ctx prov profile_name project_dir profile_path dir_s prof_s
-            local cli host cli_dir envrc_path cli_dir_s envrc_s auth_s
+            local cli host cli_dir envrc_path cli_dir_s envrc_s auth_s ssh_key ssh_key_s
             ctx=$(yq   ".projects[${i}].context"  "${manifest}")
             prov=$(yq  ".projects[${i}].provider" "${manifest}")
             cli=$(yq   ".projects[${i}].cli // \"\""      "${manifest}")
             host=$(yq  ".projects[${i}].cli_host // \"\"" "${manifest}")
+            ssh_key=$(yq ".projects[${i}].ssh_key // \"\"" "${manifest}")
             profile_name=$(_git_profile_name "${ctx}" "${prov}")
             project_dir="${projects_base}/${ctx}/${prov}"
             profile_path="${HOME}/.config/git/profiles/${profile_name}.inc"
@@ -1374,6 +1543,11 @@ git-sync-projects() {
             [[ -f "${profile_path}" ]] && prof_s="✓" || prof_s="✗ missing"
             printf '  %-20s %-20s  dir: %-12s  profile: %s\n' \
                 "${ctx}" "${prov}" "${dir_s}" "${prof_s}"
+
+            if [[ -n "${ssh_key}" ]]; then
+                [[ -f "$(_git_ssh_key_expand "${ssh_key}")" ]] && ssh_key_s="✓" || ssh_key_s="✗ missing"
+                printf '  %-20s %-20s  ssh key: %-9s %s\n' "" "" "${ssh_key_s}" "${ssh_key}"
+            fi
 
             if [[ -n "${cli}" ]]; then
                 cli_dir="$(_git_cli_config_dir "${cli}" "${ctx}")"
@@ -1410,23 +1584,34 @@ git-sync-projects() {
         return 0
     fi
 
+    _git_projects_base_ok "${projects_base}" || return 1
+
     log_info "Syncing ${count} projects from manifest ..."
     local i
     for (( i=0; i<count; i++ )); do
-        local ctx prov email key name cli host profile_name project_dir profile_path
+        local ctx prov email key name ssh_key cli host profile_name project_dir profile_path
         ctx=$(yq      ".projects[${i}].context"              "${manifest}")
         prov=$(yq     ".projects[${i}].provider"             "${manifest}")
         email=$(yq    ".projects[${i}].email"                "${manifest}")
         key=$(yq      ".projects[${i}].signing_key // \"\""  "${manifest}")
         name=$(yq     ".projects[${i}].name // \"\""         "${manifest}")
+        ssh_key=$(yq  ".projects[${i}].ssh_key // \"\""      "${manifest}")
         cli=$(yq      ".projects[${i}].cli // \"\""          "${manifest}")
         host=$(yq     ".projects[${i}].cli_host // \"\""     "${manifest}")
+
+        # A hand-edited entry must not create directories or profiles outside
+        # where they belong, nor reach project-includes.
+        if ! _git_name_ok context "${ctx}" || ! _git_name_ok provider "${prov}"; then
+            log_warn "Skipping projects[${i}]; fix it in ${manifest}"
+            continue
+        fi
+
         profile_name=$(_git_profile_name "${ctx}" "${prov}")
         project_dir="${projects_base}/${ctx}/${prov}"
         profile_path="${HOME}/.config/git/profiles/${profile_name}.inc"
 
         [[ ! -d "${project_dir}" ]] && { mkdir -p "${project_dir}"; log_info "Created: ${project_dir}"; }
-        [[ ! -f "${profile_path}" ]] && { _git_write_profile "${profile_path}" "${email}" "${key}" "${name}"; log_info "Created: ${profile_path}"; }
+        [[ ! -f "${profile_path}" ]] && { _git_write_profile "${profile_path}" "${email}" "${key}" "${name}" "${ssh_key}"; log_info "Created: ${profile_path}"; }
 
         [[ -n "${cli}" ]] && _git_wire_project_cli "${ctx}" "${prov}" "${cli}" "${host}"
     done

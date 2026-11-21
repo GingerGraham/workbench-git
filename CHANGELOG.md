@@ -4,6 +4,21 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **A project's `ssh_key` is now used.** `git-add-project --ssh-key <path>`
+  and `git-update-project --ssh-key <path|none>` write
+  `core.sshCommand = ssh -i '<path>' -o IdentitiesOnly=yes` into the
+  project's profile, so git over SSH inside that project tree uses that
+  key. Before, the manifest field had a writer that nothing called and no
+  reader, and the README listed SSH auth as out of scope. The key must be
+  a readable file at an absolute or `~/` path with no quote, backtick, `$`,
+  backslash or control character in it; a `.pub` file is accepted with a
+  warning. `git-list-projects` gains an `SSH KEY` column,
+  `git-sync-projects --status` marks a missing key file, and
+  `git-sync-projects` writes the key into a profile it recreates.
+  Fixes #44.
+
 ### Changed
 
 - **Agent and contributor guidance covers the stale-base CHANGELOG trap
@@ -13,6 +28,24 @@ All notable changes to `workbench-git` are documented here.
   push, that a release which landed on `main` since you branched hasn't
   left your `[Unreleased]` entry inside the released section, and to look
   at the Release run after merging.
+
+### Fixed
+
+- **Values in the generated `includeIf` sections are now validated.**
+  `context`, `provider` and `projects_base` went into
+  `~/.config/git/project-includes` unchecked, so a `*`, `?`, `[`, `]` or
+  `\` changed which directories a project's identity applied to, and a
+  quote or newline could end the value and add config of its own. The
+  generated `.envrc` values were already checked; these were not. `context` and
+  `provider` may now use only letters, digits, spaces, `.`, `_` and `-`,
+  and must not start with `-` or `.`; `projects_base` must not contain
+  control characters, quotes, backslashes or `* ? [ ]`.
+  `git-add-project` refuses a bad value before creating anything.
+  `git-sync-projects` and the includes regeneration skip a project with a
+  bad `context` or `provider` with a warning (and create no directory or
+  profile for it), and refuse a bad `projects_base` without touching the
+  existing file. **A project whose names use other characters is left out
+  of `project-includes` until renamed in `projects.yml`.** Fixes #45.
 
 ## [1.0.2] - 2026-11-12
 
