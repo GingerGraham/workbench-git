@@ -36,7 +36,9 @@ check_no=0
 ok()   { check_no=$((check_no + 1)); echo "OK:   [$check_no] $*"; }
 fail() { check_no=$((check_no + 1)); echo "FAIL: [$check_no] $*"; FAILED=$((FAILED + 1)); }
 
-WORK="$(mktemp -d)"
+# Resolved with pwd -P: git matches a gitdir: pattern against the real path of
+# the repository, and on macOS $TMPDIR is under /var, a symlink to /private/var.
+WORK="$(cd "$(mktemp -d)" && pwd -P)"
 trap 'rm -rf "${WORK}"' EXIT
 
 # ── mikefarah yq v4, if there is one ────────────────────────────────────────
