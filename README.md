@@ -224,6 +224,24 @@ git-sync-projects [--status]
 git-projects-base
 ```
 
+`context` and `provider` become part of a directory name, a profile file
+name and the `gitdir:` pattern in `~/.config/git/project-includes`, so they
+may use only letters, digits, spaces, `.`, `_` and `-`, and must not start
+with `-` or `.`. `git-add-project` refuses anything else before it creates
+anything. `projects_base` may contain spaces, but not control characters,
+quotes, backslashes, or the characters `*`, `?`, `[` and `]`, which a
+`gitdir:` pattern would read as wildcards.
+
+If you edit `projects.yml` by hand and break one of these rules:
+
+- a project with a bad `context` or `provider` is left out of
+  `project-includes` with a warning, and `git-sync-projects` creates no
+  directory or profile for it. Every other project is unaffected.
+- a bad `projects_base` stops `git-sync-projects` and leaves
+  `project-includes` as it was, since it is part of every pattern.
+
+Fix the value in `projects.yml` and run `git-sync-projects`.
+
 ### CLI wiring
 
 ```sh

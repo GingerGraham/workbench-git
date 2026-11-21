@@ -29,6 +29,24 @@ All notable changes to `workbench-git` are documented here.
   left your `[Unreleased]` entry inside the released section, and to look
   at the Release run after merging.
 
+### Fixed
+
+- **Values in the generated `includeIf` sections are now validated.**
+  `context`, `provider` and `projects_base` went into
+  `~/.config/git/project-includes` unchecked, so a `*`, `?`, `[`, `]` or
+  `\` changed which directories a project's identity applied to, and a
+  quote or newline could end the value and add config of its own. The
+  generated `.envrc` values were already checked; these were not. `context` and
+  `provider` may now use only letters, digits, spaces, `.`, `_` and `-`,
+  and must not start with `-` or `.`; `projects_base` must not contain
+  control characters, quotes, backslashes or `* ? [ ]`.
+  `git-add-project` refuses a bad value before creating anything.
+  `git-sync-projects` and the includes regeneration skip a project with a
+  bad `context` or `provider` with a warning (and create no directory or
+  profile for it), and refuse a bad `projects_base` without touching the
+  existing file. **A project whose names use other characters is left out
+  of `project-includes` until renamed in `projects.yml`.** Fixes #45.
+
 ## [1.0.2] - 2026-11-12
 
 ### Fixed
