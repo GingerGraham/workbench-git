@@ -16,7 +16,9 @@ wb install --bundle workstation
 ## What this gives you
 
 - Git aliases and helpers (`gwt`/`gwt-cd` worktree helpers, `git-cleanup`,
-  `gitgraph`, and the usual short aliases — `gst`, `gco`, `gcm`, ...).
+  `gitgraph`, and the usual short aliases — `gst`, `gco`, `gcm`, ...). An
+  alias is not defined when your shell already has an alias or function of
+  that name; yours is kept, and `wb status` lists what was left alone.
 - **Multi-context project identity**: commit author/email and GPG signing
   key follow the working directory automatically, keyed by
   `<context>/<provider>` (e.g. `Personal/GitHub`, `Acme/AzureDevOps`) via

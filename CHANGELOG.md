@@ -4,6 +4,19 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The git aliases no longer replace an alias or function you already
+  have.** Every alias (`gd`, `gst`, `gcm`, ...) is now defined through
+  workbench-core's `workbench_alias_define`. When your shell already uses a
+  name, yours is kept and workbench's isn't defined; the first interactive
+  shell says so once, and `wb status` lists it. This fixes `bashsource`
+  failing with `syntax error near unexpected token '('` on a host that
+  defines its own `gd()` function: the `gd` alias made bash read the
+  function's name as `git diff`. Same names, same values on a host with
+  nothing in the way. Needs workbench-core 2.30.0 or later
+  (`core_api: ">=1.10 <2.0"`); `wb update core` first.
+
 ## [1.1.0] - 2026-11-21
 
 ### Added

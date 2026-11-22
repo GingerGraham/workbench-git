@@ -72,10 +72,10 @@ else
 fi
 if [[ -e "${REPO_ROOT}/hooks" ]]; then fail "hooks/ still exists"; else ok "no hooks/ directory"; fi
 
-if [[ -n "${MANIFEST}" ]] && grep -q '^core_api: ">=1.8 <2.0"$' "${MANIFEST}"; then
-    ok "core_api requires 1.8 (core-generated getter, _wb_gh_release_asset_url; 1.7 added availability --needs/--install)"
+if [[ -n "${MANIFEST}" ]] && grep -q '^core_api: ">=1.10 <2.0"$' "${MANIFEST}"; then
+    ok "core_api requires 1.10 (workbench_alias_define; 1.8 added the core-generated getter and _wb_gh_release_asset_url, 1.7 availability --needs/--install)"
 else
-    fail "core_api must be \">=1.8 <2.0\""
+    fail "core_api must be \">=1.10 <2.0\""
 fi
 
 # Core defines get-git-functions from register.getters[] (workbench-core
