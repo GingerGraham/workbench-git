@@ -4,6 +4,8 @@ All notable changes to `workbench-git` are documented here.
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-22
+
 ### Fixed
 
 - **The git aliases no longer replace an alias or function you already
