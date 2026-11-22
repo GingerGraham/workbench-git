@@ -36,43 +36,47 @@
 # in shell/installers.sh.
 
 # ── aliases ───────────────────────────────────────────────────────────────────
+# Defined through workbench_alias_define (workbench-core, Core API 1.10), never
+# a bare `alias`: a name that is already an alias or a function in the user's
+# shell is left as it is, workbench's version is not defined, and the loader
+# says so once. Keep each value's quoting as written.
 
-alias gitgraph="git log --oneline --graph --decorate --all"
-alias gst="git status"
-alias gstp="git status --porcelain"
-alias gcl="git clone"
-alias gcm="git commit -m"
-alias gca="git commit --amend --no-edit"
-alias gco="git checkout"
-alias gcb="git checkout -b"
-alias gpl="git pull"
-alias gplr="git pull --rebase"
-alias gps="git push"
-alias gpsh="git push"
-alias gpf="git push --force-with-lease"
-alias gf="git fetch"
-alias gfa="git fetch --all"
-alias gfp="git fetch --prune"
-alias grs="git restore"
-alias grst="git restore"
-alias gsw="git switch"
-alias gswm="git switch main"
-alias gswc="git switch -c"
-alias gaa="git add --all"
-alias gap="git add -p"
-alias gd="git diff"
-alias gds="git diff --staged"
-alias glo="git log --oneline --graph --decorate"
-alias grb="git rebase"
-alias grbi="git rebase -i"
-alias gstash="git stash"
-alias gpop="git stash pop"
-alias gbr="git branch"
-alias gba="git branch -a"
-alias gbdl="git branch -d"
-alias gbd="git branch -D"
-alias gitkeep='find . -type d -empty -exec touch {}/.gitkeep \;'
-alias gitcleanup="git-cleanup"
+workbench_alias_define gitgraph git "git log --oneline --graph --decorate --all"
+workbench_alias_define gst git "git status"
+workbench_alias_define gstp git "git status --porcelain"
+workbench_alias_define gcl git "git clone"
+workbench_alias_define gcm git "git commit -m"
+workbench_alias_define gca git "git commit --amend --no-edit"
+workbench_alias_define gco git "git checkout"
+workbench_alias_define gcb git "git checkout -b"
+workbench_alias_define gpl git "git pull"
+workbench_alias_define gplr git "git pull --rebase"
+workbench_alias_define gps git "git push"
+workbench_alias_define gpsh git "git push"
+workbench_alias_define gpf git "git push --force-with-lease"
+workbench_alias_define gf git "git fetch"
+workbench_alias_define gfa git "git fetch --all"
+workbench_alias_define gfp git "git fetch --prune"
+workbench_alias_define grs git "git restore"
+workbench_alias_define grst git "git restore"
+workbench_alias_define gsw git "git switch"
+workbench_alias_define gswm git "git switch main"
+workbench_alias_define gswc git "git switch -c"
+workbench_alias_define gaa git "git add --all"
+workbench_alias_define gap git "git add -p"
+workbench_alias_define gd git "git diff"
+workbench_alias_define gds git "git diff --staged"
+workbench_alias_define glo git "git log --oneline --graph --decorate"
+workbench_alias_define grb git "git rebase"
+workbench_alias_define grbi git "git rebase -i"
+workbench_alias_define gstash git "git stash"
+workbench_alias_define gpop git "git stash pop"
+workbench_alias_define gbr git "git branch"
+workbench_alias_define gba git "git branch -a"
+workbench_alias_define gbdl git "git branch -d"
+workbench_alias_define gbd git "git branch -D"
+workbench_alias_define gitkeep git 'find . -type d -empty -exec touch {}/.gitkeep \;'
+workbench_alias_define gitcleanup git "git-cleanup"
 
 _git_gh_copilot_present() {
     command -v gh &>/dev/null || return 1
@@ -87,9 +91,9 @@ if _git_gh_copilot_present; then
     # standalone Copilot CLI under that name.
     case "$(command -v copilot 2>/dev/null)" in
         /*) ;;
-        *)  alias copilot="gh copilot" ;;
+        *)  workbench_alias_define copilot git "gh copilot" ;;
     esac
-    alias upgrade-copilot="gh extension upgrade gh-copilot"
+    workbench_alias_define upgrade-copilot git "gh extension upgrade gh-copilot"
 fi
 
 # ── functions: git helpers ────────────────────────────────────────────────────
